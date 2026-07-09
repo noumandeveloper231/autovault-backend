@@ -16,6 +16,7 @@ export function signAuthToken(registration) {
   return jwt.sign(
     {
       sub: String(registration.id),
+      name: registration.name,
       plan: registration.plan,
       portal: portalForPlan(registration.plan),
     },
