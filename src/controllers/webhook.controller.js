@@ -3,14 +3,34 @@ import { env } from "../config/env.js";
 import { Registration } from "../models/Registration.js";
 import { sendEmail } from "../utils/email.js";
 import { subscriptionWelcomeEmail } from "../utils/email-templates.js";
+import crypto from "crypto";
+
+function generateTemporaryPassword() {
+  const charset =
+    "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$";
+  const bytes = crypto.randomBytes(12);
+  let password = "";
+  for (let i = 0; i < 12; i += 1) {
+    password += charset[bytes[i] % charset.length];
+  }
+  return password;
+}
+
+function hashValue(value) {
+  return crypto.createHash("sha256").update(value).digest("hex");
+}
 
 async function sendWelcomeIfNeeded(registration) {
   if (registration.emailSentAt) return;
+  const temporaryPassword = generateTemporaryPassword();
+  registration.temporaryPasswordHash = hashValue(temporaryPassword);
   await sendEmail({
     to: registration.email,
     subject: "Your AutoVault plan is active",
     html: subscriptionWelcomeEmail({
       name: registration.name,
+      loginEmail: registration.email,
+      temporaryPassword,
       dealership: registration.dealership,
       plan: registration.plan,
       monthlyFee: registration.monthlyFee,
@@ -18,6 +38,7 @@ async function sendWelcomeIfNeeded(registration) {
     }),
   });
   registration.emailSentAt = new Date();
+  registration.temporaryPasswordSentAt = new Date();
 }
 
 export async function handleStripeWebhook(req, res) {
