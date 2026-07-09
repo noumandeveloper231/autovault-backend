@@ -23,9 +23,9 @@ const registrationSchema = new mongoose.Schema(
       default: "pending",
     },
     monthlyFee: { type: Number, default: 39.99 },
-    stripeCustomerId: { type: String, default: null },
-    stripeSubscriptionId: { type: String, default: null },
-    stripeCheckoutSessionId: { type: String, default: null },
+    stripeCustomerId: { type: String },
+    stripeSubscriptionId: { type: String },
+    stripeCheckoutSessionId: { type: String },
     completionTokenHash: { type: String, default: null },
     completionTokenExpiresAt: { type: Date, default: null },
     emailSentAt: { type: Date, default: null },
@@ -42,5 +42,18 @@ registrationSchema.index(
   { stripeSubscriptionId: 1 },
   { unique: true, sparse: true },
 );
+
+registrationSchema.pre("save", function unsetNullStripeIds(next) {
+  if (this.stripeSubscriptionId == null || this.stripeSubscriptionId === "") {
+    this.stripeSubscriptionId = undefined;
+  }
+  if (this.stripeCustomerId == null || this.stripeCustomerId === "") {
+    this.stripeCustomerId = undefined;
+  }
+  if (this.stripeCheckoutSessionId == null || this.stripeCheckoutSessionId === "") {
+    this.stripeCheckoutSessionId = undefined;
+  }
+  next();
+});
 
 export const Registration = mongoose.model("Registration", registrationSchema);
