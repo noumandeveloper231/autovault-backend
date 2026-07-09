@@ -31,6 +31,7 @@ const registrationSchema = new mongoose.Schema(
     completionTokenHash: { type: String, default: null },
     completionTokenExpiresAt: { type: Date, default: null },
     emailSentAt: { type: Date, default: null },
+    welcomeEmailLockId: { type: String, default: null },
     temporaryPasswordHash: { type: String, default: null },
     temporaryPasswordSentAt: { type: Date, default: null },
   },

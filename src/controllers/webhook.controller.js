@@ -4,7 +4,7 @@ import { Registration } from "../models/Registration.js";
 import { sendEmail } from "../utils/email.js";
 import { subscriptionWelcomeEmail } from "../utils/email-templates.js";
 import { hashPassword, portalForPlan } from "../utils/auth.js";
-import { randomBytes } from "crypto";
+import { randomBytes, randomUUID } from "crypto";
 
 function generateTemporaryPassword() {
   const charset =
@@ -26,25 +26,47 @@ function loginPathForPlan(plan) {
 
 async function sendWelcomeIfNeeded(registration) {
   if (registration.emailSentAt) return;
+  const lockId = randomUUID();
+  const lockResult = await Registration.updateOne(
+    {
+      _id: registration._id,
+      emailSentAt: null,
+      welcomeEmailLockId: null,
+    },
+    {
+      $set: { welcomeEmailLockId: lockId },
+    },
+  );
+  if (!lockResult.modifiedCount) return;
+
   const temporaryPassword = generateTemporaryPassword();
   registration.temporaryPasswordHash = hashPassword(temporaryPassword);
   const base = env.FRONTEND_URL.replace(/\/+$/, "");
   const loginPath = loginPathForPlan(registration.plan);
-  await sendEmail({
-    to: registration.email,
-    subject: "Your AutoVault plan is active",
-    html: subscriptionWelcomeEmail({
-      name: registration.name,
-      loginEmail: registration.email,
-      temporaryPassword,
-      dealership: registration.dealership,
-      plan: registration.plan,
-      monthlyFee: registration.monthlyFee,
-      loginUrl: `${base}${loginPath}`,
-    }),
-  });
-  registration.emailSentAt = new Date();
-  registration.temporaryPasswordSentAt = new Date();
+  try {
+    await sendEmail({
+      to: registration.email,
+      subject: "Your AutoVault plan is active",
+      html: subscriptionWelcomeEmail({
+        name: registration.name,
+        loginEmail: registration.email,
+        temporaryPassword,
+        dealership: registration.dealership,
+        plan: registration.plan,
+        monthlyFee: registration.monthlyFee,
+        loginUrl: `${base}${loginPath}`,
+      }),
+    });
+    registration.emailSentAt = new Date();
+    registration.temporaryPasswordSentAt = new Date();
+    registration.welcomeEmailLockId = null;
+  } catch (error) {
+    await Registration.updateOne(
+      { _id: registration._id, welcomeEmailLockId: lockId },
+      { $set: { welcomeEmailLockId: null } },
+    );
+    throw error;
+  }
 }
 
 export async function handleStripeWebhook(req, res) {
