@@ -1,6 +1,8 @@
 import mongoose from "mongoose";
 import { env } from "../config/env.js";
 import { Registration } from "../models/Registration.js";
+import { SuperOwner } from "../models/SuperOwner.js";
+import { hashPassword } from "../utils/auth.js";
 
 export async function connectDb() {
   await mongoose.connect(env.MONGODB_URI);
@@ -24,4 +26,31 @@ export async function connectDb() {
 
   await Registration.syncIndexes();
   console.log("[db] Registration indexes synced");
+  await SuperOwner.syncIndexes();
+  console.log("[db] SuperOwner indexes synced");
+
+  if (env.SUPER_OWNER_PASSWORD) {
+    const ownerEmail = String(env.SUPER_OWNER_EMAIL || "").trim().toLowerCase();
+    const passwordHash = hashPassword(env.SUPER_OWNER_PASSWORD);
+    const ownerResult = await SuperOwner.updateOne(
+      { email: ownerEmail },
+      {
+        $setOnInsert: {
+          email: ownerEmail,
+          name: "Super Owner",
+          isActive: true,
+        },
+        $set: {
+          passwordHash,
+          isActive: true,
+        },
+      },
+      { upsert: true },
+    );
+    if (ownerResult.upsertedCount > 0) {
+      console.log(`[db] Seeded super owner: ${ownerEmail}`);
+    }
+  } else {
+    console.log("[db] SUPER_OWNER_PASSWORD missing. Super owner seed skipped.");
+  }
 }

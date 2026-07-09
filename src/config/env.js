@@ -24,6 +24,8 @@ export const env = {
   RESEND_API_KEY: process.env.RESEND_API_KEY || "",
   FROM_EMAIL: process.env.FROM_EMAIL || "onboarding@resend.dev",
   FROM_NAME: process.env.FROM_NAME || "AutoVault",
+  SUPER_OWNER_EMAIL: process.env.SUPER_OWNER_EMAIL || "owner@autovault360.com",
+  SUPER_OWNER_PASSWORD: process.env.SUPER_OWNER_PASSWORD || "",
 };
 
 export function assertRequiredEnv() {
