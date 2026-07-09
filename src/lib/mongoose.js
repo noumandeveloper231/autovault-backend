@@ -38,7 +38,6 @@ export async function connectDb() {
         $setOnInsert: {
           email: ownerEmail,
           name: "Super Owner",
-          isActive: true,
         },
         $set: {
           passwordHash,
