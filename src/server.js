@@ -8,6 +8,7 @@ import registrationRoutes from "./routes/registration.routes.js";
 import checkoutRoutes from "./routes/checkout.routes.js";
 import webhookRoutes from "./routes/webhook.routes.js";
 import ownerRoutes from "./routes/owner.routes.js";
+import authRoutes from "./routes/auth.routes.js";
 
 assertRequiredEnv();
 
@@ -58,6 +59,7 @@ app.get("/health", (req, res) => {
 app.use("/api/registrations", registrationRoutes);
 app.use("/api/checkout", checkoutRoutes);
 app.use("/api/owner", ownerRoutes);
+app.use("/api/auth", authRoutes);
 
 app.use((error, req, res, next) => {
   console.error(error);

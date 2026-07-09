@@ -3,7 +3,7 @@ import { env } from "../config/env.js";
 import { Registration } from "../models/Registration.js";
 import { sendEmail } from "../utils/email.js";
 import { subscriptionWelcomeEmail } from "../utils/email-templates.js";
-import crypto from "crypto";
+import { hashPassword, portalForPlan } from "../utils/auth.js";
 
 function generateTemporaryPassword() {
   const charset =
@@ -16,14 +16,19 @@ function generateTemporaryPassword() {
   return password;
 }
 
-function hashValue(value) {
-  return crypto.createHash("sha256").update(value).digest("hex");
+function loginPathForPlan(plan) {
+  const portal = portalForPlan(plan);
+  if (portal === "wholesale") return "/wholesale/login";
+  if (portal === "sales_rep") return "/sales-rep/login";
+  return "/login";
 }
 
 async function sendWelcomeIfNeeded(registration) {
   if (registration.emailSentAt) return;
   const temporaryPassword = generateTemporaryPassword();
-  registration.temporaryPasswordHash = hashValue(temporaryPassword);
+  registration.temporaryPasswordHash = hashPassword(temporaryPassword);
+  const base = env.FRONTEND_URL.replace(/\/+$/, "");
+  const loginPath = loginPathForPlan(registration.plan);
   await sendEmail({
     to: registration.email,
     subject: "Your AutoVault plan is active",
@@ -34,7 +39,7 @@ async function sendWelcomeIfNeeded(registration) {
       dealership: registration.dealership,
       plan: registration.plan,
       monthlyFee: registration.monthlyFee,
-      loginUrl: `${env.FRONTEND_URL.replace(/\/+$/, "")}/login`,
+      loginUrl: `${base}${loginPath}`,
     }),
   });
   registration.emailSentAt = new Date();

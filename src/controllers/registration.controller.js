@@ -5,6 +5,14 @@ import {
   verifyCompletionToken,
 } from "../utils/tokens.js";
 import { stripe } from "../lib/stripe.js";
+import { portalForPlan } from "../utils/auth.js";
+
+function loginPathForPlan(plan) {
+  const portal = portalForPlan(plan);
+  if (portal === "wholesale") return "/wholesale/login";
+  if (portal === "sales_rep") return "/sales-rep/login";
+  return "/login";
+}
 
 export async function upsertRegistration(req, res) {
   const { name, email, phone, dealership, city, state } = req.body;
@@ -107,6 +115,7 @@ export async function completeRegistration(req, res) {
       planLabel: PLAN_SLUG_TO_LABEL[registration.plan] || "Dealership Plan",
       status: registration.status,
       paymentStatus: registration.paymentStatus,
+      loginPath: loginPathForPlan(registration.plan),
     },
   });
 }
