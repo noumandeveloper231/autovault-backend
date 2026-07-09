@@ -20,7 +20,7 @@ const allowedOrigins = new Set([
   "http://localhost:8080",
   "http://127.0.0.1:8080",
   "https://www.autovault360.com",
-  "https://autovault360.com"
+  "https://autovault360.com",
 ]);
 try {
   const frontendOrigin = new URL(env.FRONTEND_URL).origin;
