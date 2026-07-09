@@ -7,8 +7,10 @@ import {
 import { stripe } from "../lib/stripe.js";
 
 export async function upsertRegistration(req, res) {
-  const { name, email, phone, dealership } = req.body;
+  const { name, email, phone, dealership, city, state } = req.body;
   const normalizedEmail = String(email).toLowerCase().trim();
+  const normalizedState = String(state).trim().toUpperCase();
+  const normalizedCity = String(city).trim();
 
   const existing = await Registration.findOne({ email: normalizedEmail });
   if (existing?.status === "active") {
@@ -21,6 +23,8 @@ export async function upsertRegistration(req, res) {
     existing.name = name.trim();
     existing.phone = (phone || "").trim();
     existing.dealership = dealership.trim();
+    existing.city = normalizedCity;
+    existing.state = normalizedState;
     await existing.save();
     return res.json({
       registrationId: existing.id,
@@ -33,6 +37,8 @@ export async function upsertRegistration(req, res) {
     email: normalizedEmail,
     phone: (phone || "").trim(),
     dealership: dealership.trim(),
+    city: normalizedCity,
+    state: normalizedState,
   });
 
   return res.status(201).json({

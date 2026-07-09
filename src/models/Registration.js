@@ -7,6 +7,8 @@ const registrationSchema = new mongoose.Schema(
     email: { type: String, required: true, lowercase: true, trim: true },
     phone: { type: String, default: "", trim: true },
     dealership: { type: String, required: true, trim: true },
+    city: { type: String, required: true, trim: true },
+    state: { type: String, required: true, trim: true, uppercase: true },
     plan: {
       type: String,
       enum: ["wholesaler", "independent_dealer", "growing_dealership"],
@@ -36,6 +38,8 @@ const registrationSchema = new mongoose.Schema(
 );
 
 registrationSchema.index({ email: 1 }, { unique: true });
+registrationSchema.index({ state: 1 });
+registrationSchema.index({ city: 1 });
 registrationSchema.index({ stripeCustomerId: 1 });
 registrationSchema.index({ stripeCheckoutSessionId: 1 });
 registrationSchema.index(

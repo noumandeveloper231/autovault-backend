@@ -5,6 +5,7 @@ import {
   upsertRegistration,
 } from "../controllers/registration.controller.js";
 import { validate } from "../middleware/validate.js";
+import { US_STATE_CODES } from "../utils/us-states.js";
 
 const router = express.Router();
 
@@ -18,6 +19,12 @@ router.post(
       .trim()
       .isLength({ min: 7, max: 30 }),
     body("dealership").trim().isLength({ min: 2, max: 150 }),
+    body("city").trim().isLength({ min: 2, max: 80 }),
+    body("state")
+      .trim()
+      .toUpperCase()
+      .isIn(US_STATE_CODES)
+      .withMessage("state must be a valid US state code"),
     validate,
   ],
   upsertRegistration,

@@ -8,6 +8,8 @@ export async function listRegistrations(req, res) {
           { name: { $regex: q, $options: "i" } },
           { email: { $regex: q, $options: "i" } },
           { dealership: { $regex: q, $options: "i" } },
+          { city: { $regex: q, $options: "i" } },
+          { state: { $regex: q, $options: "i" } },
         ],
       }
     : {};
@@ -20,11 +22,14 @@ export async function listRegistrations(req, res) {
       email: item.email,
       phone: item.phone,
       dealership: item.dealership,
+      city: item.city,
+      state: item.state,
       plan: item.plan,
       status: item.status,
       paymentStatus: item.paymentStatus,
       monthlyFee: item.monthlyFee,
       createdAt: item.createdAt,
+      updatedAt: item.updatedAt,
     })),
   });
 }
