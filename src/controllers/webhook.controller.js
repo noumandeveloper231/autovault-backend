@@ -4,11 +4,12 @@ import { Registration } from "../models/Registration.js";
 import { sendEmail } from "../utils/email.js";
 import { subscriptionWelcomeEmail } from "../utils/email-templates.js";
 import { hashPassword, portalForPlan } from "../utils/auth.js";
+import { randomBytes } from "crypto";
 
 function generateTemporaryPassword() {
   const charset =
     "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$";
-  const bytes = crypto.randomBytes(12);
+  const bytes = randomBytes(12);
   let password = "";
   for (let i = 0; i < 12; i += 1) {
     password += charset[bytes[i] % charset.length];
