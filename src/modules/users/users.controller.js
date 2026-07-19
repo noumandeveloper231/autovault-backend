@@ -1,0 +1,72 @@
+import * as usersService from "./users.service.js";
+import { tenantId } from "../../common/auth-middleware.js";
+import { forbidden } from "../../common/errors.js";
+
+function clientIp(req) {
+  return req.ip || req.headers["x-forwarded-for"] || null;
+}
+
+function dealershipId(req) {
+  const id = tenantId(req, req.query.dealershipId);
+  if (!id) throw forbidden("No dealership context on this account.");
+  return id;
+}
+
+export async function listUsers(req, res) {
+  const result = await usersService.listUsers(dealershipId(req), req.query);
+  return res.json(result);
+}
+
+export async function createUser(req, res) {
+  const user = await usersService.createUser(
+    dealershipId(req),
+    req.body,
+    req.auth.userId,
+    clientIp(req),
+  );
+  return res.status(201).json({ user });
+}
+
+export async function updateUser(req, res) {
+  const user = await usersService.updateUser(
+    dealershipId(req),
+    req.params.id,
+    req.body,
+    req.auth.userId,
+    clientIp(req),
+  );
+  return res.json({ user });
+}
+
+export async function deactivateUser(req, res) {
+  const user = await usersService.deactivateUser(
+    dealershipId(req),
+    req.params.id,
+    req.auth.userId,
+    clientIp(req),
+  );
+  return res.json({ user });
+}
+
+export async function inviteUser(req, res) {
+  const invitation = await usersService.inviteUser(
+    dealershipId(req),
+    req.body,
+    req.auth.userId,
+    clientIp(req),
+  );
+  return res.status(201).json({ invitation });
+}
+
+export async function acceptInvitation(req, res) {
+  const user = await usersService.acceptInvitation(req.body, clientIp(req));
+  return res.status(201).json({ user });
+}
+
+export async function listInvitations(req, res) {
+  const result = await usersService.listInvitations(
+    dealershipId(req),
+    req.query,
+  );
+  return res.json(result);
+}

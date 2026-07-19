@@ -1,0 +1,138 @@
+import { z } from "zod";
+
+const decimal = z.coerce.number().min(0).optional().nullable();
+const requiredDecimal = z.coerce.number().min(0);
+
+const vehicleStatus = z.enum([
+  "in_stock",
+  "needs_attention",
+  "pending_deal",
+  "sold",
+  "loss",
+  "wholesale",
+  "out_of_state_sale",
+]);
+
+export const listVehiclesQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(25),
+  q: z.string().optional(),
+  status: vehicleStatus.optional(),
+});
+
+export const createVehicleSchema = z.object({
+  vin: z.string().min(5).max(17),
+  stockNumber: z.string().max(50).optional().nullable(),
+  make: z.string().min(1).max(80),
+  model: z.string().min(1).max(80),
+  trim: z.string().max(80).optional().nullable(),
+  year: z.coerce.number().int().min(1900).max(2100),
+  bodyStyle: z.string().max(80).optional().nullable(),
+  exteriorColor: z.string().max(50).optional().nullable(),
+  interiorColor: z.string().max(50).optional().nullable(),
+  drivetrain: z.string().max(50).optional().nullable(),
+  fuelType: z.string().max(50).optional().nullable(),
+  engine: z.string().max(80).optional().nullable(),
+  transmission: z.string().max(50).optional().nullable(),
+  mileage: z.coerce.number().int().min(0).optional().nullable(),
+  doors: z.coerce.number().int().min(1).max(8).optional().nullable(),
+  acquisitionDate: z.coerce.date().optional().nullable(),
+  acquisitionCost: decimal,
+  askingPrice: decimal,
+  marketValue: decimal,
+  wholesalePrice: decimal,
+  reconditioningCost: requiredDecimal.optional(),
+  registrationFees: requiredDecimal.optional(),
+  auctionFees: requiredDecimal.optional(),
+  flooringFees: requiredDecimal.optional(),
+  titleStatus: z.string().max(50).optional().nullable(),
+  licensePlate: z.string().max(20).optional().nullable(),
+  state: z.string().max(2).optional().nullable(),
+  sellerAuction: z.string().max(120).optional().nullable(),
+  purchaseType: z.string().max(50).optional().nullable(),
+  notes: z.string().max(5000).optional().nullable(),
+  titleReceived: z.boolean().optional(),
+  flooringStartDate: z.coerce.date().optional().nullable(),
+  flooringPlanId: z.string().uuid().optional().nullable(),
+  status: vehicleStatus.optional(),
+  isWholesale: z.boolean().optional(),
+});
+
+const addOnItemSchema = z.object({
+  desc: z.string().min(1, "Description is required"),
+  type: z.string().min(1, "Type is required"),
+  price: z.coerce.number().min(0, "Price must be >= 0"),
+});
+
+const feesSchema = z.object({
+  addOnItems: z.array(addOnItemSchema).default([]),
+}).catchall(z.any());
+
+export const updateVehicleSchema = createVehicleSchema
+  .partial()
+  .extend({
+    soldPrice: z.coerce.number().min(0).optional().nullable(),
+    fees: feesSchema.optional(),
+    additionalExpenses: z.coerce.number().min(0).optional(),
+  })
+  .refine((d) => Object.keys(d).length > 0, { message: "No fields to update" });
+
+export const changeStatusSchema = z.object({
+  status: vehicleStatus,
+  note: z.string().max(1000).optional().nullable(),
+});
+
+export const createVehicleExpenseSchema = z.object({
+  repairDate: z.coerce.date(),
+  category: z.string().max(50).optional(),
+  repairType: z.string().max(80).optional().nullable(),
+  description: z.string().min(1).max(500),
+  expenseName: z.string().max(120).optional().nullable(),
+  shopVendor: z.string().max(120).optional().nullable(),
+  paymentMethod: z.string().max(50).optional().nullable(),
+  invoiceNumber: z.string().max(80).optional().nullable(),
+  notes: z.string().max(2000).optional().nullable(),
+  laborCost: requiredDecimal.optional(),
+  partsCost: requiredDecimal.optional(),
+  otherFees: requiredDecimal.optional(),
+  totalCost: requiredDecimal.optional(),
+  isInternal: z.boolean().optional(),
+  paymentStatus: z.enum(["unpaid", "paid", "partial"]).optional(),
+  datePaid: z.coerce.date().optional().nullable(),
+});
+
+export const updateVehicleExpenseSchema = createVehicleExpenseSchema
+  .partial()
+  .refine((d) => Object.keys(d).length > 0, { message: "No fields to update" });
+
+export const createFlooringPlanSchema = z.object({
+  name: z.string().min(1).max(120).optional(),
+  rateType: z.enum(["monthly", "daily", "apr"]).optional(),
+  baseRate: z.coerce.number().min(0),
+  effectiveDate: z.coerce.date(),
+  rateIncreaseEnabled: z.boolean().optional(),
+  increaseAfterDays: z.coerce.number().int().min(0).optional().nullable(),
+  increaseAmountType: z.string().max(20).optional().nullable(),
+  increaseAmount: decimal,
+  maxCap: decimal,
+  buyFee: decimal,
+  lateFeePerDay: decimal,
+  lateFeeAfterDays: z.coerce.number().int().min(0).optional().nullable(),
+  gracePeriodDays: z.coerce.number().int().min(0).optional().nullable(),
+  isActive: z.boolean().optional(),
+});
+
+export const updateFlooringPlanSchema = createFlooringPlanSchema
+  .partial()
+  .refine((d) => Object.keys(d).length > 0, { message: "No fields to update" });
+
+export const vehicleIdParam = z.object({ id: z.string().uuid() });
+
+export const vehicleExpenseParams = z.object({
+  id: z.string().uuid(),
+  expenseId: z.string().uuid(),
+});
+
+export const flooringBreakdownQuerySchema = z.object({
+  asOfDate: z.coerce.date().optional(),
+});

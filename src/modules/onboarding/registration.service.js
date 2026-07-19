@@ -1,0 +1,184 @@
+import { prisma } from "../../lib/prisma.js";
+import { conflict, notFound, validationError } from "../../common/errors.js";
+import { serializeRegistration, PLAN_SLUG_TO_LABEL } from "../../utils/plans.js";
+import { hashToken, verifyCompletionToken } from "../../utils/tokens.js";
+import { stripe } from "../../lib/stripe.js";
+import { portalForPlan } from "../../common/auth-utils.js";
+import { activateFromRegistration } from "../dealerships/dealership.service.js";
+import { sendEmail } from "../../utils/email.js";
+import { subscriptionWelcomeEmail } from "../../utils/email-templates.js";
+import { env } from "../../config/env.js";
+
+function loginPathForPlan(plan) {
+  const portal = portalForPlan(plan);
+  if (portal === "wholesale") return "/wholesale/login";
+  if (portal === "sales_rep") return "/sales-rep/login";
+  return "/login";
+}
+
+export async function upsertRegistration(data) {
+  const existing = await prisma.registration.findUnique({
+    where: { email: data.email },
+  });
+
+  if (existing?.status === "active") {
+    throw conflict("This email already has an active subscription.");
+  }
+
+  if (existing) {
+    const updated = await prisma.registration.update({
+      where: { id: existing.id },
+      data: {
+        name: data.name,
+        phone: data.phone || "",
+        dealershipName: data.dealershipName,
+        city: data.city,
+        state: data.state,
+      },
+    });
+    return { registrationId: updated.id, status: updated.status, created: false };
+  }
+
+  const created = await prisma.registration.create({
+    data: {
+      name: data.name,
+      email: data.email,
+      phone: data.phone || "",
+      dealershipName: data.dealershipName,
+      city: data.city,
+      state: data.state,
+    },
+  });
+
+  return { registrationId: created.id, status: created.status, created: true };
+}
+
+export async function completeRegistration(token) {
+  if (!token) throw validationError("Missing token.");
+
+  let payload;
+  try {
+    payload = verifyCompletionToken(token);
+  } catch {
+    throw validationError("Invalid or expired token.");
+  }
+
+  const registration = await prisma.registration.findUnique({
+    where: { id: payload.registrationId },
+  });
+  if (!registration) throw notFound("Registration not found.");
+
+  if (
+    !registration.completionTokenHash ||
+    registration.completionTokenHash !== hashToken(token) ||
+    !registration.completionTokenExpiresAt ||
+    registration.completionTokenExpiresAt.getTime() < Date.now()
+  ) {
+    throw validationError("Token is no longer valid.");
+  }
+
+  let temporaryPassword = null;
+  const sessionId = payload.sessionId || registration.stripeCheckoutSessionId;
+  if (registration.status !== "active" && stripe && sessionId) {
+    try {
+      const session = await stripe.checkout.sessions.retrieve(sessionId, {
+        expand: ["subscription"],
+      });
+      if (session.payment_status === "paid" || session.subscription) {
+        const subId =
+          typeof session.subscription === "string"
+            ? session.subscription
+            : session.subscription?.id;
+        await prisma.registration.update({
+          where: { id: registration.id },
+          data: {
+            status: "active",
+            paymentStatus: "on_time",
+            stripeCheckoutSessionId: session.id,
+            stripeCustomerId: String(session.customer || ""),
+            stripeSubscriptionId: subId || registration.stripeSubscriptionId,
+          },
+        });
+        const updated = await prisma.registration.findUnique({ where: { id: registration.id } });
+        if (updated && !updated.dealershipId) {
+          try {
+            const result = await activateFromRegistration(updated);
+            temporaryPassword = result.temporaryPassword;
+            if (temporaryPassword) {
+              const base = env.FRONTEND_URL.replace(/\/+$/, "");
+              await sendEmail({
+                to: updated.email,
+                subject: "Your AutoVault plan is active",
+                html: subscriptionWelcomeEmail({
+                  name: updated.name,
+                  loginEmail: updated.email,
+                  temporaryPassword,
+                  dealership: updated.dealershipName,
+                  plan: PLAN_SLUG_TO_LABEL[updated.plan] || updated.plan,
+                  monthlyFee: updated.monthlyFee,
+                  loginUrl: `${base}${loginPathForPlan(updated.plan)}`,
+                }),
+              });
+              await prisma.registration.update({
+                where: { id: registration.id },
+                data: { emailSentAt: new Date() },
+              });
+            }
+          } catch {
+            // best-effort — webhook may create it
+          }
+        }
+      }
+    } catch {
+      // Stripe lookup is best-effort
+    }
+  }
+
+  await prisma.registration.update({
+    where: { id: registration.id },
+    data: {
+      completionTokenHash: null,
+      completionTokenExpiresAt: null,
+    },
+  });
+
+  const fresh = await prisma.registration.findUnique({
+    where: { id: registration.id },
+  });
+
+  return {
+    registration: {
+      ...serializeRegistration(fresh),
+      loginPath: loginPathForPlan(fresh.plan),
+      loginEmail: fresh.email,
+      temporaryPassword,
+    },
+  };
+}
+
+export async function getRegistrationById(id) {
+  const row = await prisma.registration.findUnique({ where: { id } });
+  if (!row) throw notFound("Registration not found.");
+  return { registration: serializeRegistration(row) };
+}
+
+export async function listRegistrations(q) {
+  const where = q
+    ? {
+        OR: [
+          { name: { contains: q, mode: "insensitive" } },
+          { email: { contains: q, mode: "insensitive" } },
+          { dealershipName: { contains: q, mode: "insensitive" } },
+          { city: { contains: q, mode: "insensitive" } },
+          { state: { contains: q, mode: "insensitive" } },
+        ],
+      }
+    : {};
+
+  const rows = await prisma.registration.findMany({
+    where,
+    orderBy: { createdAt: "desc" },
+  });
+
+  return { registrations: rows.map(serializeRegistration) };
+}
