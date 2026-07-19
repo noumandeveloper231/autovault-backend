@@ -198,6 +198,13 @@ export async function createSalesRep(dealershipId, payload, ctx) {
     }
   }
 
+  try {
+    const { ensureSalesRepGroupChat } = await import("../messages/messages.service.js");
+    await ensureSalesRepGroupChat(dealershipId);
+  } catch (groupErr) {
+    console.warn("[createSalesRep] Failed to sync Group Chat:", groupErr?.message || groupErr);
+  }
+
   return {
     salesRep,
     temporaryPassword: payload.password ? undefined : password,
@@ -393,6 +400,15 @@ export async function updateSalesRep(id, dealershipId, payload, ctx) {
 
     return { user: u, profile };
   }, { timeout: 30000 });
+
+  if (payload.isActive != null) {
+    try {
+      const { ensureSalesRepGroupChat } = await import("../messages/messages.service.js");
+      await ensureSalesRepGroupChat(dealershipId);
+    } catch (groupErr) {
+      console.warn("[updateSalesRep] Failed to sync Group Chat:", groupErr?.message || groupErr);
+    }
+  }
 
   return serializeSalesRep(updated.user, updated.profile);
 }

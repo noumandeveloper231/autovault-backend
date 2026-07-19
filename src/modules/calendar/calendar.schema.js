@@ -41,5 +41,5 @@ export const listDayNotesQuerySchema = z.object({
 });
 
 export const upsertDayNoteSchema = z.object({
-  body: z.string().min(1),
+  body: z.string().max(5000),
 });

@@ -1038,6 +1038,7 @@ model Conversation {
   type            String     @default("DIRECT")
   name            String?
   avatarUrl       String?
+  isSystem        Boolean    @default(false)
   isArchived      Boolean    @default(false)
   lastMessageAt   DateTime?
   lastMessageText String?
@@ -1053,6 +1054,7 @@ model Conversation {
   typingStatuses TypingStatus[]
 
   @@index([dealershipId, updatedAt])
+  @@index([dealershipId, isSystem])
   @@map("conversations")
 }
 

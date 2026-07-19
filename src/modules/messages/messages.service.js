@@ -7,6 +7,8 @@ import {
   joinUsersToConversation,
 } from "../../lib/socket.js";
 
+export const SALES_REP_GROUP_NAME = "Group Chat";
+
 function serializeMember(m) {
   return {
     id: m.user.id,
@@ -46,6 +48,116 @@ async function assertGroupAdmin(conversationId, userId) {
   return member;
 }
 
+async function assertNotSystemConversation(conversationId, dealershipId) {
+  const conversation = await prisma.conversation.findFirst({
+    where: { id: conversationId, dealershipId },
+    select: { id: true, isSystem: true },
+  });
+  if (!conversation) throw notFound("Conversation not found.");
+  if (conversation.isSystem) {
+    throw forbidden("This default group chat cannot be edited or left.");
+  }
+  return conversation;
+}
+
+/**
+ * Ensure the dealership has a locked sales-rep "Group Chat" and sync membership
+ * to all active sales_rep users. Safe to call frequently (listConversations).
+ */
+export async function ensureSalesRepGroupChat(dealershipId) {
+  const reps = await prisma.user.findMany({
+    where: {
+      dealershipId,
+      role: "sales_rep",
+      deletedAt: null,
+      isActive: true,
+    },
+    select: { id: true },
+  });
+  const repIds = reps.map((r) => r.id);
+  const repSet = new Set(repIds);
+
+  let conv = await prisma.conversation.findFirst({
+    where: { dealershipId, isSystem: true, type: "GROUP" },
+    select: { id: true, name: true, isArchived: true },
+  });
+
+  if (!conv) {
+    conv = await prisma.conversation.create({
+      data: {
+        dealershipId,
+        type: "GROUP",
+        name: SALES_REP_GROUP_NAME,
+        isSystem: true,
+        members: {
+          create: repIds.map((userId) => ({
+            userId,
+            role: "MEMBER",
+          })),
+        },
+      },
+      select: { id: true, name: true, isArchived: true },
+    });
+    if (repIds.length) {
+      joinUsersToConversation(repIds, conv.id);
+      emitConversationUpdated(repIds, {
+        conversationId: conv.id,
+        action: "created",
+      });
+    }
+    return conv;
+  }
+
+  if (conv.name !== SALES_REP_GROUP_NAME || conv.isArchived) {
+    await prisma.conversation.update({
+      where: { id: conv.id },
+      data: { name: SALES_REP_GROUP_NAME, isArchived: false },
+    });
+  }
+
+  const members = await prisma.conversationMember.findMany({
+    where: { conversationId: conv.id },
+    select: { id: true, userId: true, leftAt: true },
+  });
+  const memberByUser = new Map(members.map((m) => [m.userId, m]));
+  const toJoin = [];
+
+  for (const userId of repIds) {
+    const existing = memberByUser.get(userId);
+    if (!existing) {
+      await prisma.conversationMember.create({
+        data: { conversationId: conv.id, userId, role: "MEMBER" },
+      });
+      toJoin.push(userId);
+    } else if (existing.leftAt) {
+      await prisma.conversationMember.update({
+        where: { id: existing.id },
+        data: { leftAt: null, joinedAt: new Date(), role: "MEMBER" },
+      });
+      toJoin.push(userId);
+    }
+  }
+
+  for (const m of members) {
+    if (!m.leftAt && !repSet.has(m.userId)) {
+      await prisma.conversationMember.update({
+        where: { id: m.id },
+        data: { leftAt: new Date() },
+      });
+    }
+  }
+
+  if (toJoin.length) {
+    joinUsersToConversation(toJoin, conv.id);
+    emitConversationUpdated(toJoin, {
+      conversationId: conv.id,
+      action: "participants_added",
+    });
+  }
+
+  return conv;
+}
+
 function serializeConversation(conv, currentUserId, unreadCount = 0) {
   return serializeRecord({
     id: conv.id,
@@ -53,6 +165,7 @@ function serializeConversation(conv, currentUserId, unreadCount = 0) {
     type: conv.type,
     name: conv.name,
     avatarUrl: conv.avatarUrl,
+    isSystem: !!conv.isSystem,
     isArchived: conv.isArchived,
     lastMessageAt: conv.lastMessageAt?.toISOString() || null,
     lastMessageText: conv.lastMessageText,
@@ -103,6 +216,12 @@ function serializeMessage(msg) {
 }
 
 export async function listConversations(dealershipId, userId, { archived = false } = {}) {
+  try {
+    await ensureSalesRepGroupChat(dealershipId);
+  } catch (err) {
+    console.warn("[messages] ensureSalesRepGroupChat failed:", err?.message || err);
+  }
+
   const rows = await prisma.conversation.findMany({
     where: {
       dealershipId,
@@ -119,7 +238,7 @@ export async function listConversations(dealershipId, userId, { archived = false
         },
       },
     },
-    orderBy: { updatedAt: "desc" },
+    orderBy: [{ isSystem: "desc" }, { updatedAt: "desc" }],
   });
 
   // Single query for unread — avoids N parallel counts exhausting the Neon pool
@@ -499,6 +618,7 @@ export async function markAllRead(userId) {
 }
 
 export async function updateConversation(conversationId, dealershipId, userId, data) {
+  await assertNotSystemConversation(conversationId, dealershipId);
   await assertGroupAdmin(conversationId, userId);
 
   const updateData = {};
@@ -523,6 +643,7 @@ export async function updateConversation(conversationId, dealershipId, userId, d
 }
 
 export async function archiveConversation(conversationId, dealershipId, userId) {
+  await assertNotSystemConversation(conversationId, dealershipId);
   await assertMember(conversationId, userId);
 
   const conversation = await prisma.conversation.findFirst({
@@ -547,6 +668,7 @@ export async function archiveConversation(conversationId, dealershipId, userId) 
 }
 
 export async function leaveConversation(conversationId, dealershipId, userId) {
+  await assertNotSystemConversation(conversationId, dealershipId);
   await assertMember(conversationId, userId);
 
   await prisma.conversationMember.updateMany({
@@ -558,6 +680,7 @@ export async function leaveConversation(conversationId, dealershipId, userId) {
 }
 
 export async function addParticipants(conversationId, dealershipId, userId, participantIds) {
+  await assertNotSystemConversation(conversationId, dealershipId);
   await assertGroupAdmin(conversationId, userId);
 
   const conversation = await prisma.conversation.findFirst({ where: { id: conversationId, dealershipId } });
@@ -616,6 +739,7 @@ export async function addParticipants(conversationId, dealershipId, userId, part
 }
 
 export async function removeParticipant(conversationId, dealershipId, userId, targetUserId) {
+  await assertNotSystemConversation(conversationId, dealershipId);
   const isSelf = userId === targetUserId;
   if (!isSelf) {
     await assertGroupAdmin(conversationId, userId);
