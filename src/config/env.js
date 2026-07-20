@@ -42,6 +42,16 @@ export const env = {
   R2_ENDPOINT: process.env.R2_ENDPOINT || "",
   R2_REGION: process.env.R2_REGION || "auto",
   R2_PUBLIC_BASE_URL: process.env.R2_PUBLIC_BASE_URL || "",
+
+  // Jenna AI — env only for key + models (+ daily cap)
+  OPENROUTER_API_KEY: process.env.OPENROUTER_API_KEY || "",
+  JENNA_ENABLED:
+    String(process.env.JENNA_ENABLED || "false").toLowerCase() === "true",
+  JENNA_MODEL_CHAT:
+    process.env.JENNA_MODEL_CHAT || "openrouter/free",
+  JENNA_MODEL_EMBED:
+    process.env.JENNA_MODEL_EMBED || "openai/text-embedding-3-small",
+  JENNA_DAILY_LIMIT: toNumber(process.env.JENNA_DAILY_LIMIT, 20),
 };
 
 export function assertRequiredEnv() {

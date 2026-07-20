@@ -53,6 +53,7 @@ import calendarRoutes from "./modules/calendar/calendar.routes.js";
 import dashboardNotesRoutes from "./modules/dashboard-notes/dashboard-notes.routes.js";
 import messagesRoutes from "./modules/messages/messages.routes.js";
 import filesRoutes from "./modules/files/files.routes.js";
+import jennaRoutes from "./modules/jenna/jenna.routes.js";
 import { runTaxReminders } from "./jobs/tax-reminders.js";
 import { runMessageJobs } from "./jobs/messages.js";
 
@@ -161,6 +162,7 @@ app.use("/api/v1/calendar", calendarRoutes);
 app.use("/api/v1/dashboard/notes", dashboardNotesRoutes);
 app.use("/api/v1/messages", messagesRoutes);
 app.use("/api/v1/files", filesRoutes);
+app.use("/api/v1/jenna", jennaRoutes);
 app.use("/api/v1/registrations", registrationRouter);
 app.use("/api/v1/checkout", checkoutRouter);
 app.use("/api/v1/platform", platformV1Routes);
