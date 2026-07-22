@@ -33,6 +33,10 @@ export function getR2Client() {
     },
     // Required for R2 / many S3-compatible providers
     forcePathStyle: true,
+    // AWS SDK v3 defaults to flexible checksums which get baked into
+    // presigned URLs (x-amz-checksum-*) and break browser PUTs / CORS.
+    requestChecksumCalculation: "WHEN_REQUIRED",
+    responseChecksumValidation: "WHEN_REQUIRED",
   });
 }
 

@@ -20,6 +20,7 @@ import {
   approveJacketSchema,
   addDocumentSchema,
   jacketIdParamSchema,
+  jacketDocumentParamSchema,
 } from "./jackets.schema.js";
 import * as ctrl from "./jackets.controller.js";
 
@@ -103,6 +104,13 @@ router.post(
   validateParams(jacketIdParamSchema),
   validateBody(addDocumentSchema),
   asyncHandler(ctrl.addDocument),
+);
+
+router.delete(
+  "/:id/documents/:documentId",
+  requireRoles(...writeRoles),
+  validateParams(jacketDocumentParamSchema),
+  asyncHandler(ctrl.removeDocument),
 );
 
 router.get(

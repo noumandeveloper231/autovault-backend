@@ -66,3 +66,8 @@ export const addDocumentSchema = z.object({
 export const jacketIdParamSchema = z.object({
   id: z.string().uuid(),
 });
+
+export const jacketDocumentParamSchema = z.object({
+  id: z.string().uuid(),
+  documentId: z.string().uuid(),
+});

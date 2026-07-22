@@ -94,6 +94,7 @@ export async function createUploadUrl(dealershipId, payload, userId) {
     file: serializeFile(file),
     uploadUrl: signed.uploadUrl,
     publicUrl: signed.publicUrl,
+    downloadUrl: await createR2DownloadUrl(storageKey),
     method: "PUT",
     headers: signed.headers,
     expiresIn: 900,

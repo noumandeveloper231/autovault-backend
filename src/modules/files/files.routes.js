@@ -6,7 +6,6 @@ import {
   requireTenant,
   requireRoles,
   WRITE_ROLES,
-  DEALERSHIP_ADMIN_ROLES,
 } from "../../common/auth-middleware.js";
 import {
   createUploadUrlSchema,
@@ -68,7 +67,7 @@ router.get(
 
 router.delete(
   "/:id",
-  requireRoles(...DEALERSHIP_ADMIN_ROLES, "platform_owner"),
+  requireRoles(...WRITE_ROLES, "platform_owner"),
   validateParams(fileIdParamSchema),
   asyncHandler(async (req, res) => {
     const file = await filesService.softDeleteFile(

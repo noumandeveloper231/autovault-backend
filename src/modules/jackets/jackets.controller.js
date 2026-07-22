@@ -105,6 +105,16 @@ export async function addDocument(req, res) {
   return res.status(201).json({ document: doc });
 }
 
+export async function removeDocument(req, res) {
+  const doc = await jacketsService.removeDocument(
+    req.params.id,
+    req.params.documentId,
+    req.auth.dealershipId,
+    ctx(req),
+  );
+  return res.json({ document: doc });
+}
+
 export async function activity(req, res) {
   const rows = await jacketsService.getActivity(
     req.params.id,

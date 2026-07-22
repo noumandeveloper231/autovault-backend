@@ -49,6 +49,33 @@ Optional:
 2. **R2 ? Manage R2 API Tokens ? Create API token** with Object Read & Write on that bucket.
 3. Copy Account ID, Access Key ID, Secret Access Key into `.env`.
 4. (Recommended) Enable a public bucket URL or custom domain ? set `R2_PUBLIC_BASE_URL`.
+5. **Required for browser uploads:** configure bucket CORS (dashboard or script below).
+   Without this, `PUT` from `localhost:5500` / production is blocked by CORS preflight.
+
+Dashboard (R2 ? your bucket ? Settings ? CORS Policy), paste:
+
+```json
+[
+  {
+    "AllowedOrigins": [
+      "http://localhost:5500",
+      "http://127.0.0.1:5500",
+      "https://www.autovault360.com",
+      "https://autovault360.com"
+    ],
+    "AllowedMethods": ["GET", "PUT", "HEAD", "DELETE"],
+    "AllowedHeaders": ["*"],
+    "ExposeHeaders": ["ETag", "Content-Type"],
+    "MaxAgeSeconds": 3600
+  }
+]
+```
+
+Or apply via script (uses your `.env` R2 keys):
+
+```bash
+npm run r2:cors
+```
 
 Upload flow:
 

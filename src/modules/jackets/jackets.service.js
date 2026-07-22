@@ -721,6 +721,29 @@ export async function addDocument(id, dealershipId, payload, ctx) {
   };
 }
 
+export async function removeDocument(id, documentId, dealershipId, ctx) {
+  const jacket = await getJacketOrThrow(id, dealershipId);
+  assertSalesRepAccess(jacket, ctx, true);
+
+  const doc = await prisma.dealJacketDocument.findFirst({
+    where: { id: documentId, dealJacketId: id },
+  });
+  if (!doc) throw notFound("Document not found.");
+
+  await prisma.dealJacketDocument.delete({ where: { id: documentId } });
+
+  await logTransition(jacket, "document_removed", ctx, {
+    oldStatus: jacket.workflowStatus,
+    newStatus: jacket.workflowStatus,
+    detail: { documentName: doc.documentName, documentId },
+  });
+
+  return {
+    id: doc.id,
+    documentName: doc.documentName,
+  };
+}
+
 export async function getActivity(id, dealershipId, ctx) {
   const jacket = await getJacketOrThrow(id, dealershipId);
   assertSalesRepAccess(jacket, ctx);
