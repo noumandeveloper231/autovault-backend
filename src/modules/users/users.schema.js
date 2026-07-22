@@ -60,6 +60,20 @@ export const acceptInvitationSchema = z.object({
   fullName: z.string().min(1).max(150).optional(),
 });
 
+export const markIntroCompletedSchema = z.object({
+  introCompleted: z.boolean(),
+});
+
+export const acceptTermsSchema = z.object({
+  termsAccepted: z.literal(true),
+  termsVersion: z.string().min(1).max(20),
+  termsPrintedName: z.string().min(2).max(200),
+  termsDealership: z.string().min(2).max(200),
+  termsSignature: z.string().min(1),
+  termsIp: z.string().max(50).optional().nullable(),
+  termsUserAgent: z.string().max(300).optional().nullable(),
+});
+
 export const listInvitationsQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(25),

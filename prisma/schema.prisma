@@ -270,8 +270,16 @@ model User {
   dealership   Dealership? @relation(fields: [dealershipId], references: [id])
   lastLoginAt  DateTime?
   mustResetPassword Boolean @default(false)
-  introCompleted   Boolean   @default(false)
-  createdAt    DateTime  @default(now())
+   introCompleted   Boolean   @default(false)
+   termsAccepted    Boolean   @default(false)
+   termsVersion     String?
+   termsPrintedName String?
+   termsDealership  String?
+   termsSignature   String?   @db.Text
+   termsAcceptedAt  DateTime?
+   termsIp          String?
+   termsUserAgent   String?
+   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
   deletedAt    DateTime?
 

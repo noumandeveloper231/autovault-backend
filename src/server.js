@@ -20,7 +20,7 @@ import {
   platformV1Routes,
   ownerLegacyRoutes,
 } from "./modules/platform/owner.routes.js";
-import { usersRouter, invitationsRouter } from "./modules/users/users.routes.js";
+import { usersRouter, invitationsRouter, introRouter } from "./modules/users/users.routes.js";
 import {
   vehiclesRouter,
   flooringPlansRouter,
@@ -136,6 +136,7 @@ app.get("/api/v1/jobs/messages", async (_req, res, next) => {
 
 app.use("/api/v1/auth", authV1Routes);
 app.use("/api/v1/dealerships", dealershipRoutes);
+app.use("/api/v1/users", introRouter);
 app.use("/api/v1/users", usersRouter);
 app.use("/api/v1/invitations", invitationsRouter);
 app.use("/api/v1/vehicles", vehiclesRouter);

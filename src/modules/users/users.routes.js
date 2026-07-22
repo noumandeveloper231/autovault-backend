@@ -18,11 +18,35 @@ import {
   updateUserSchema,
   inviteUserSchema,
   acceptInvitationSchema,
+  markIntroCompletedSchema,
+  acceptTermsSchema,
   listInvitationsQuerySchema,
 } from "./users.schema.js";
 import * as ctrl from "./users.controller.js";
 
 const usersRouter = express.Router();
+
+// Self-service intro routes — any authenticated user can mark/reset their own intro
+const introRouter = express.Router();
+introRouter.use(authenticate, requireTenant);
+introRouter.patch(
+  "/me/intro",
+  validateBody(markIntroCompletedSchema),
+  asyncHandler(ctrl.markIntroCompleted),
+);
+introRouter.post(
+  "/me/intro/reset",
+  asyncHandler(ctrl.resetIntro),
+);
+introRouter.get(
+  "/me/terms",
+  asyncHandler(ctrl.getTermsStatus),
+);
+introRouter.post(
+  "/me/terms",
+  validateBody(acceptTermsSchema),
+  asyncHandler(ctrl.acceptTerms),
+);
 
 usersRouter.use(authenticate, requireTenant, requireRoles(...ADMIN_ROLES));
 
@@ -69,4 +93,4 @@ invitationsRouter.get(
   asyncHandler(ctrl.listInvitations),
 );
 
-export { usersRouter, invitationsRouter };
+export { usersRouter, invitationsRouter, introRouter };

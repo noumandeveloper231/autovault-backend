@@ -48,6 +48,10 @@ export function serializeUser(user) {
     dealershipId: user.dealershipId,
     lastLoginAt: user.lastLoginAt,
     mustResetPassword: user.mustResetPassword,
+    introCompleted: user.introCompleted,
+    termsAccepted: user.termsAccepted,
+    termsVersion: user.termsVersion || null,
+    termsAcceptedAt: user.termsAcceptedAt || null,
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
   };
