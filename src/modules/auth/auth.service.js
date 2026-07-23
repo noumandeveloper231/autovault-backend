@@ -40,6 +40,7 @@ export function serializeUser(user, dealership = null) {
   return {
     id: user.id,
     name: user.fullName,
+    fullName: user.fullName,
     email: user.email,
     role: user.role,
     portal,
@@ -51,6 +52,13 @@ export function serializeUser(user, dealership = null) {
     state: dealership?.state ?? null,
     plan: dealership?.plan ?? null,
     mustResetPassword: user.mustResetPassword,
+    introCompleted: !!user.introCompleted,
+    termsAccepted: !!user.termsAccepted,
+    termsVersion: user.termsVersion || null,
+    termsPrintedName: user.termsPrintedName || null,
+    termsDealership: user.termsDealership || null,
+    termsSignature: user.termsSignature || null,
+    termsAcceptedAt: user.termsAcceptedAt || null,
   };
 }
 

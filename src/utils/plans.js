@@ -86,6 +86,26 @@ export const PLAN_FEATURES = {
   },
 };
 
+/** Marketing blurbs for Payment Settings / upgrade UI */
+export const PLAN_MARKETING = {
+  wholesaler:
+    "Move cars fast and know your numbers at every auction — Jenna AI, VIN-tied inventory, dealer-to-dealer logs & flooring costs",
+  independent_dealer:
+    "Everything to run your retail lot — Jenna AI, full inventory, customer deals, flooring costs & every expense",
+  growing_dealership:
+    "The full platform — your whole team, your reps and your accountant together, with Jenna AI built in",
+};
+
+export const PLAN_SLUGS = [
+  "wholesaler",
+  "independent_dealer",
+  "growing_dealership",
+];
+
+export function priceEnvKeyForPlan(plan) {
+  return PLAN_TO_PRICE_ENV[plan] || "";
+}
+
 export function planHasFeature(plan, feature) {
   return PLAN_FEATURES[plan]?.[feature] === true;
 }

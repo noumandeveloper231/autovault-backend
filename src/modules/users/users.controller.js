@@ -131,6 +131,7 @@ export async function getTermsStatus(req, res) {
       termsVersion: true,
       termsPrintedName: true,
       termsDealership: true,
+      termsSignature: true,
       termsAcceptedAt: true,
       termsIp: true,
     },

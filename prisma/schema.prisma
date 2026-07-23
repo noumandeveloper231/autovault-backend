@@ -219,6 +219,15 @@ model Dealership {
   monthlyFee           Decimal          @default(39.99) @db.Decimal(12, 2)
   stripeCustomerId     String?
   stripeSubscriptionId String?          @unique
+  billingAutoExpense   Boolean          @default(false)
+  billingNotifyBefore  Boolean          @default(true)
+  billingReminderFor   DateTime?
+  billingDueEmailFor   DateTime?
+  cardBrand            String?
+  cardLast4            String?          @db.VarChar(4)
+  cardExpMonth         Int?
+  cardExpYear          Int?
+  currentPeriodEnd     DateTime?
   createdAt            DateTime         @default(now())
   updatedAt            DateTime         @updatedAt
   deletedAt            DateTime?
@@ -250,10 +259,35 @@ model Dealership {
   vehicleStatusHistory VehicleStatusHistory[]
   pricingHistory       PricingHistory[]
   vehicleImages        VehicleImage[]
+  billingPayments      BillingPayment[]
 
   @@index([status])
   @@index([state])
+  @@index([stripeCustomerId])
   @@map("dealerships")
+}
+
+model BillingPayment {
+  id                     String     @id @default(uuid()) @db.Uuid
+  dealershipId           String     @db.Uuid
+  dealership             Dealership @relation(fields: [dealershipId], references: [id], onDelete: Cascade)
+  stripeInvoiceId        String     @unique
+  stripePaymentIntentId  String?
+  amount                 Decimal    @db.Decimal(12, 2)
+  currency               String     @default("usd") @db.VarChar(10)
+  status                 String     @db.VarChar(20)
+  planSlug               String?    @db.VarChar(40)
+  planLabel              String?    @db.VarChar(80)
+  paidAt                 DateTime?
+  periodStart            DateTime?
+  periodEnd              DateTime?
+  hostedInvoiceUrl       String?
+  expenseId              String?    @db.Uuid
+  createdAt              DateTime   @default(now())
+  updatedAt              DateTime   @updatedAt
+
+  @@index([dealershipId, paidAt])
+  @@map("billing_payments")
 }
 
 model User {

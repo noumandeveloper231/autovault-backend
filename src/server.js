@@ -54,7 +54,9 @@ import dashboardNotesRoutes from "./modules/dashboard-notes/dashboard-notes.rout
 import messagesRoutes from "./modules/messages/messages.routes.js";
 import filesRoutes from "./modules/files/files.routes.js";
 import jennaRoutes from "./modules/jenna/jenna.routes.js";
+import billingRoutes from "./modules/billing/billing.routes.js";
 import { runTaxReminders } from "./jobs/tax-reminders.js";
+import { runBillingReminders } from "./jobs/billing-reminders.js";
 import { runMessageJobs } from "./jobs/messages.js";
 
 assertRequiredEnv();
@@ -121,6 +123,19 @@ app.get("/api/v1/jobs/tax-reminders", async (_req, res, next) => {
   }
 });
 
+app.get("/api/v1/jobs/billing-reminders", async (_req, res, next) => {
+  try {
+    const key = _req.headers["x-cron-key"] || _req.query.key;
+    if (key !== env.OWNER_API_KEY) {
+      return res.status(401).json({ error: { message: "Unauthorized" } });
+    }
+    const result = await runBillingReminders();
+    return res.json({ ok: true, result });
+  } catch (err) {
+    return next(err);
+  }
+});
+
 app.get("/api/v1/jobs/messages", async (_req, res, next) => {
   try {
     const key = _req.headers["x-cron-key"] || _req.query.key;
@@ -164,6 +179,7 @@ app.use("/api/v1/dashboard/notes", dashboardNotesRoutes);
 app.use("/api/v1/messages", messagesRoutes);
 app.use("/api/v1/files", filesRoutes);
 app.use("/api/v1/jenna", jennaRoutes);
+app.use("/api/v1/billing", billingRoutes);
 app.use("/api/v1/registrations", registrationRouter);
 app.use("/api/v1/checkout", checkoutRouter);
 app.use("/api/v1/platform", platformV1Routes);
