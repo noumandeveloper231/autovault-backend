@@ -258,7 +258,9 @@ export async function createVehicle(dealershipId, payload, userId) {
       acquisitionCost: payload.acquisitionCost,
       auctionFees: payload.auctionFees ?? 0,
       acquisitionDate: payload.acquisitionDate ?? new Date(),
-      flooringStartDate: payload.floored ? new Date() : null,
+      flooringStartDate: payload.floored
+        ? payload.acquisitionDate ?? new Date()
+        : null,
       titleReceived: payload.titlePresent !== false,
       titlePresent: payload.titlePresent !== false,
       isWholesale: payload.isWholesale ?? false,
