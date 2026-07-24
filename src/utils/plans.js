@@ -1,13 +1,16 @@
 export const PLAN_LABEL_TO_SLUG = {
   Wholesaler: "wholesaler",
+  Wholesalers: "wholesaler",
   "Independent Dealer": "independent_dealer",
+  "Independent Dealers": "independent_dealer",
   "Growing Dealership": "growing_dealership",
+  "Growing Dealerships": "growing_dealership",
 };
 
 export const PLAN_SLUG_TO_LABEL = {
-  wholesaler: "Wholesaler",
-  independent_dealer: "Independent Dealer",
-  growing_dealership: "Growing Dealership",
+  wholesaler: "Wholesalers",
+  independent_dealer: "Independent Dealers",
+  growing_dealership: "Growing Dealerships",
 };
 
 export const PLAN_TO_PRICE_ENV = {
@@ -51,9 +54,9 @@ export const PLAN_HIERARCHY = {
 };
 
 export const PLAN_LABELS = {
-  wholesaler: "Wholesaler",
-  independent_dealer: "Independent Dealer",
-  growing_dealership: "Growing Dealership",
+  wholesaler: "Wholesalers",
+  independent_dealer: "Independent Dealers",
+  growing_dealership: "Growing Dealerships",
 };
 
 export const PLAN_FEATURES = {

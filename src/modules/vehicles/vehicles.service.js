@@ -13,7 +13,15 @@ function toDecimal(value) {
 export function serializeVehicle(vehicle) {
   if (!vehicle) return null;
   const { passwordHash, ...rest } = vehicle;
-  return serializeDecimals(rest);
+  const jackets = vehicle.dealJackets;
+  const hasDealJacket = Array.isArray(jackets)
+    ? jackets.length > 0
+    : !!vehicle.dealJacket;
+  return {
+    ...serializeDecimals(rest),
+    hasDealJacket,
+    dealJacket: hasDealJacket,
+  };
 }
 
 async function findVehicleRecord(dealershipId, vehicleId) {

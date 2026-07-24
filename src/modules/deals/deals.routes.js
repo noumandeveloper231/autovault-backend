@@ -14,6 +14,7 @@ import {
 import {
   markSoldSchema,
   markLossSchema,
+  previousSoldSchema,
   soldVehiclesQuerySchema,
   vehicleIdParamSchema,
 } from "./deals.schema.js";
@@ -22,6 +23,14 @@ import * as dealsCtrl from "./deals.controller.js";
 const router = express.Router();
 
 router.use(authenticate, requireTenant);
+
+// Must be registered before /:id routes so "previous-sold" is not treated as an id.
+router.post(
+  "/previous-sold",
+  requireRoles("owner", "manager"),
+  validateBody(previousSoldSchema),
+  asyncHandler(dealsCtrl.importPreviousSold),
+);
 
 router.post(
   "/:id/mark-sold",

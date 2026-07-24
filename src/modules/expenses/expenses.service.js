@@ -3,14 +3,22 @@ import { notFound } from "../../common/errors.js";
 import { writeAuditLog } from "../../common/audit.js";
 import { toNum } from "../../common/serialize.js";
 import { pageMeta } from "../../common/validate.js";
+import { normalizeExpenseCategory } from "./expense-categories.js";
 
 function serializeExpense(e) {
   if (!e) return null;
+  const { category, subcategory } = normalizeExpenseCategory(
+    e.category,
+    e.subcategory,
+    e.vehicleVin,
+  );
   return {
     id: e.id,
     dealershipId: e.dealershipId,
     expenseDate: e.expenseDate,
-    category: e.category,
+    category,
+    subcategory,
+    expType: subcategory,
     name: e.name,
     vendor: e.vendor,
     description: e.description,
@@ -30,11 +38,14 @@ function serializeExpense(e) {
 }
 
 export async function listExpenses(dealershipId, query) {
-  const { page, limit, q, category, status, from, to } = query;
+  const { page, limit, q, category, subcategory, status, from, to, vehicleVin } =
+    query;
   const where = { dealershipId, deletedAt: null };
 
   if (category) where.category = category;
+  if (subcategory) where.subcategory = subcategory;
   if (status) where.status = status;
+  if (vehicleVin) where.vehicleVin = vehicleVin;
   if (from || to) {
     where.expenseDate = {};
     if (from) where.expenseDate.gte = from;
@@ -48,6 +59,7 @@ export async function listExpenses(dealershipId, query) {
       { referenceNumber: { contains: q, mode: "insensitive" } },
       { notes: { contains: q, mode: "insensitive" } },
       { vehicleVin: { contains: q, mode: "insensitive" } },
+      { subcategory: { contains: q, mode: "insensitive" } },
     ];
   }
 
@@ -76,11 +88,13 @@ export async function getExpense(id, dealershipId) {
 }
 
 export async function createExpense(dealershipId, payload, ctx) {
+  const subcategory = payload.subcategory || payload.expType || "Other";
   const expense = await prisma.dealershipExpense.create({
     data: {
       dealershipId,
       expenseDate: payload.expenseDate,
       category: payload.category,
+      subcategory,
       name: payload.name,
       vendor: payload.vendor?.trim() ?? payload.name?.trim() ?? "",
       description: payload.description?.trim() ?? payload.name?.trim() ?? "",
@@ -93,7 +107,10 @@ export async function createExpense(dealershipId, payload, ctx) {
       receiptStoragePath: payload.receiptStoragePath ?? null,
       notes: payload.notes ?? null,
       taxDeductible: payload.taxDeductible ?? true,
-      isRecurring: payload.isRecurring ?? (payload.recurringFrequency && payload.recurringFrequency !== "One-Time"),
+      isRecurring:
+        payload.isRecurring ??
+        (payload.recurringFrequency &&
+          payload.recurringFrequency !== "One-Time"),
       createdById: ctx.userId,
     },
   });
@@ -117,23 +134,47 @@ export async function updateExpense(id, dealershipId, payload, ctx) {
   });
   if (!existing) throw notFound("Expense not found.");
 
+  const subcategory =
+    payload.subcategory !== undefined
+      ? payload.subcategory
+      : payload.expType !== undefined
+        ? payload.expType
+        : undefined;
+
   const expense = await prisma.dealershipExpense.update({
     where: { id },
     data: {
       ...(payload.expenseDate != null && { expenseDate: payload.expenseDate }),
       ...(payload.category != null && { category: payload.category }),
+      ...(subcategory !== undefined && { subcategory }),
       ...(payload.name != null && { name: payload.name }),
-      ...(payload.vendor !== undefined && { vendor: payload.vendor?.trim() ?? "" }),
-      ...(payload.description !== undefined && { description: payload.description?.trim() ?? "" }),
+      ...(payload.vendor !== undefined && {
+        vendor: payload.vendor?.trim() ?? "",
+      }),
+      ...(payload.description !== undefined && {
+        description: payload.description?.trim() ?? "",
+      }),
       ...(payload.amount != null && { amount: payload.amount }),
       ...(payload.status != null && { status: payload.status }),
-      ...(payload.recurringFrequency != null && { recurringFrequency: payload.recurringFrequency }),
-      ...(payload.vehicleVin !== undefined && { vehicleVin: payload.vehicleVin }),
-      ...(payload.referenceNumber !== undefined && { referenceNumber: payload.referenceNumber }),
-      ...(payload.paymentMethod !== undefined && { paymentMethod: payload.paymentMethod }),
-      ...(payload.receiptStoragePath !== undefined && { receiptStoragePath: payload.receiptStoragePath }),
+      ...(payload.recurringFrequency != null && {
+        recurringFrequency: payload.recurringFrequency,
+      }),
+      ...(payload.vehicleVin !== undefined && {
+        vehicleVin: payload.vehicleVin,
+      }),
+      ...(payload.referenceNumber !== undefined && {
+        referenceNumber: payload.referenceNumber,
+      }),
+      ...(payload.paymentMethod !== undefined && {
+        paymentMethod: payload.paymentMethod,
+      }),
+      ...(payload.receiptStoragePath !== undefined && {
+        receiptStoragePath: payload.receiptStoragePath,
+      }),
       ...(payload.notes !== undefined && { notes: payload.notes }),
-      ...(payload.taxDeductible != null && { taxDeductible: payload.taxDeductible }),
+      ...(payload.taxDeductible != null && {
+        taxDeductible: payload.taxDeductible,
+      }),
       ...(payload.isRecurring != null && { isRecurring: payload.isRecurring }),
     },
   });

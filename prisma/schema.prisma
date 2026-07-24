@@ -782,6 +782,7 @@ model DealershipExpense {
   dealership           Dealership      @relation(fields: [dealershipId], references: [id])
   expenseDate          DateTime        @db.Date
   category             String          @db.VarChar(50)
+  subcategory          String?         @db.VarChar(80)
   name                 String          @db.VarChar(255)
   vendor               String          @default("")
   description          String          @default("")

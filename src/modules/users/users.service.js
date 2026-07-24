@@ -19,7 +19,7 @@ async function assertAllowedRoleForPlan(dealershipId, role) {
   if (dealership.plan === "independent_dealer") {
     if (role === "sales_rep") {
       throw forbidden(
-        "Your Independent Dealer plan does not include sales representatives. Upgrade to the Operations plan to add sales reps.",
+        "Your Independent Dealers plan does not include sales representatives. Upgrade to the Growing Dealerships plan to add sales reps.",
       );
     }
     if (ADMIN_ROLES.includes(role)) {
@@ -28,7 +28,7 @@ async function assertAllowedRoleForPlan(dealershipId, role) {
       });
       if (existingAdmins >= 1) {
         throw forbidden(
-          "Your Independent Dealer plan only allows 1 admin account. Upgrade to the Operations plan to add more.",
+          "Your Independent Dealers plan only allows 1 admin account. Upgrade to the Growing Dealerships plan to add more.",
         );
       }
     }

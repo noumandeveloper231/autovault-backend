@@ -6,8 +6,12 @@ services:
     name: autovault-backend
     runtime: node
     rootDir: Static/server
+    # generate runs via postinstall; migrate must run before the app serves traffic
     buildCommand: npm install && npx prisma generate
     startCommand: npx prisma migrate deploy && npm start
+    # If the dashboard overrides these, keep them identical:
+    # Build: npm install && npx prisma generate
+    # Start: npx prisma migrate deploy && npm start
     healthCheckPath: /health
     envVars:
       - key: NODE_ENV

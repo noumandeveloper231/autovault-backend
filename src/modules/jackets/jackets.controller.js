@@ -19,6 +19,25 @@ export async function list(req, res) {
   return res.json(result);
 }
 
+export async function checkDealNumber(req, res) {
+  const result = await jacketsService.checkDealNumber(
+    req.auth.dealershipId,
+    req.query,
+  );
+  return res.json(result);
+}
+
+export async function generateDealNumber(req, res) {
+  const result = await jacketsService.generateDealNumber(
+    req.auth.dealershipId,
+    {
+      excludeJacketId: req.query.excludeJacketId,
+      excludeVehicleId: req.query.excludeVehicleId,
+    },
+  );
+  return res.json(result);
+}
+
 export async function create(req, res) {
   const jacket = await jacketsService.createJacket(
     req.auth.dealershipId,

@@ -277,7 +277,8 @@ export async function maybeCreateAutoExpense(dealership, payment) {
     data: {
       dealershipId: dealership.id,
       expenseDate: payment.paidAt || new Date(),
-      category: "Software / subscriptions",
+      category: "Dealership Expense",
+      subcategory: "Subscriptions",
       name: `${planLabel} plan subscription`,
       vendor: "AutoVault",
       description: "Subscription payment (auto-logged from Payment Settings)",

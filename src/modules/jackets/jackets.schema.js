@@ -63,6 +63,14 @@ export const addDocumentSchema = z.object({
   fileType: z.string().default("application/pdf"),
 });
 
+export const checkDealNumberQuerySchema = z.object({
+  rosNumber: z.string().min(1).max(40),
+  /** Exclude this jacket id when editing an existing jacket */
+  excludeJacketId: z.string().uuid().optional(),
+  /** Exclude this vehicle's existing deal/jacket when completing a sold jacket */
+  excludeVehicleId: z.string().uuid().optional(),
+});
+
 export const jacketIdParamSchema = z.object({
   id: z.string().uuid(),
 });

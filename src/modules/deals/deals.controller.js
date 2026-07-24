@@ -15,6 +15,14 @@ export async function markSold(req, res) {
   return res.status(201).json(result);
 }
 
+export async function importPreviousSold(req, res) {
+  const result = await dealsService.importPreviousSold(req.body, {
+    ...ctx(req),
+    plan: req.auth?.plan || null,
+  });
+  return res.status(201).json(result);
+}
+
 export async function markLoss(req, res) {
   const result = await dealsService.markLoss(req.params.id, req.body, ctx(req));
   return res.json({ vehicle: result });

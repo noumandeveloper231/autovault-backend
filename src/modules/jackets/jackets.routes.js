@@ -15,6 +15,7 @@ import {
   createJacketSchema,
   updateJacketSchema,
   jacketListQuerySchema,
+  checkDealNumberQuerySchema,
   requestChangesSchema,
   rejectJacketSchema,
   approveJacketSchema,
@@ -36,6 +37,19 @@ router.get(
   requireRoles(...readRoles),
   validateQuery(jacketListQuerySchema),
   asyncHandler(ctrl.list),
+);
+
+router.get(
+  "/check-deal-number",
+  requireRoles(...readRoles),
+  validateQuery(checkDealNumberQuerySchema),
+  asyncHandler(ctrl.checkDealNumber),
+);
+
+router.post(
+  "/generate-deal-number",
+  requireRoles(...writeRoles),
+  asyncHandler(ctrl.generateDealNumber),
 );
 
 router.post(

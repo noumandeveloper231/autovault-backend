@@ -73,7 +73,7 @@ export function requireExactPlan(planSlug) {
   return (req, _res, next) => {
     if (req.auth?.role === "platform_owner") return next();
     if (req.auth?.plan !== planSlug) {
-      return next(forbidden("This feature is only available on the Wholesaler plan."));
+      return next(forbidden("This feature is only available on the Wholesalers plan."));
     }
     return next();
   };

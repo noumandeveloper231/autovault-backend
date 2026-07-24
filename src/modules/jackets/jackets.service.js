@@ -192,6 +192,99 @@ async function logTransition(jacket, action, ctx, extra = {}) {
   });
 }
 
+/**
+ * True if rosNumber is already used on a deal or deal jacket in this dealership.
+ */
+export async function isDealNumberTaken(
+  dealershipId,
+  rosNumber,
+  { excludeJacketId, excludeVehicleId } = {},
+) {
+  const normalized = String(rosNumber || "").trim();
+  if (!normalized) return false;
+
+  const jacketWhere = {
+    dealershipId,
+    deletedAt: null,
+    rosNumber: { equals: normalized, mode: "insensitive" },
+  };
+  if (excludeJacketId) jacketWhere.id = { not: excludeJacketId };
+  if (excludeVehicleId) jacketWhere.vehicleId = { not: excludeVehicleId };
+
+  const dealWhere = {
+    dealershipId,
+    deletedAt: null,
+    rosNumber: { equals: normalized, mode: "insensitive" },
+  };
+  if (excludeVehicleId) dealWhere.vehicleId = { not: excludeVehicleId };
+
+  const [jacketHit, dealHit] = await Promise.all([
+    prisma.dealJacket.findFirst({ where: jacketWhere, select: { id: true } }),
+    prisma.deal.findFirst({ where: dealWhere, select: { id: true } }),
+  ]);
+  return !!(jacketHit || dealHit);
+}
+
+export async function checkDealNumber(dealershipId, query) {
+  const rosNumber = String(query.rosNumber || "").trim();
+  if (!rosNumber) {
+    return { rosNumber: "", available: false, status: "empty" };
+  }
+  const taken = await isDealNumberTaken(dealershipId, rosNumber, {
+    excludeJacketId: query.excludeJacketId,
+    excludeVehicleId: query.excludeVehicleId,
+  });
+  return {
+    rosNumber,
+    available: !taken,
+    status: taken ? "not_applicable" : "applicable",
+  };
+}
+
+/**
+ * Auto-generate DL-{4..6 digit} and rotate until unused in this dealership.
+ */
+export async function generateDealNumber(dealershipId, opts = {}) {
+  const maxAttempts = 40;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    // Prefer 5 digits; occasionally 4 or 6 for variety within the requested range
+    const digitCount = attempt < 20 ? 5 : attempt < 30 ? 4 : 6;
+    const min = digitCount === 4 ? 1000 : digitCount === 5 ? 10000 : 100000;
+    const max = digitCount === 4 ? 9999 : digitCount === 5 ? 99999 : 999999;
+    const n = min + Math.floor(Math.random() * (max - min + 1));
+    const rosNumber = `DL-${n}`;
+    const taken = await isDealNumberTaken(dealershipId, rosNumber, {
+      excludeJacketId: opts.excludeJacketId,
+      excludeVehicleId: opts.excludeVehicleId,
+    });
+    if (!taken) {
+      return {
+        rosNumber,
+        available: true,
+        status: "applicable",
+        attempts: attempt + 1,
+      };
+    }
+  }
+  // Sequential fallback if random space is exhausted
+  for (let n = 1000; n <= 999999; n++) {
+    const rosNumber = `DL-${n}`;
+    const taken = await isDealNumberTaken(dealershipId, rosNumber, {
+      excludeJacketId: opts.excludeJacketId,
+      excludeVehicleId: opts.excludeVehicleId,
+    });
+    if (!taken) {
+      return {
+        rosNumber,
+        available: true,
+        status: "applicable",
+        attempts: maxAttempts + n,
+      };
+    }
+  }
+  throw conflict("Could not allocate a unique deal number. Try again.");
+}
+
 export async function listJackets(dealershipId, query, ctx) {
   const { page, limit, q, workflowStatus, salesRepId } = query;
   const where = { dealershipId, deletedAt: null };
@@ -249,7 +342,10 @@ export async function createJacket(dealershipId, payload, ctx) {
     },
   });
   if (!vehicle) throw notFound("Vehicle not found.");
-  if (["sold", "loss"].includes(vehicle.status)) {
+  // Allow creating a jacket for sold vehicles that do not have one yet.
+  // Creating a jacket for an in-stock vehicle marks it sold via markSold path in UI;
+  // this endpoint still supports draft jackets for pending_deal.
+  if (vehicle.status === "loss") {
     throw conflict("Vehicle is not available for a deal jacket.");
   }
 
@@ -258,6 +354,11 @@ export async function createJacket(dealershipId, payload, ctx) {
   });
   if (existing) throw conflict("A deal jacket already exists for this vehicle.");
 
+  if (vehicle.status === "sold") {
+    throw conflict(
+      "Use Save Deal & Mark Sold / complete jacket for sold vehicles without a jacket.",
+    );
+  }
   const customer = await prisma.customer.findFirst({
     where: {
       id: payload.customerId,
