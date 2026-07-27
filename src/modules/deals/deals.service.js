@@ -7,6 +7,7 @@ import {
   nextJacketNumber,
   createJacketActivity,
   serializeDealJacket,
+  generateDealNumber,
 } from "../jackets/jackets.service.js";
 
 function serializeVehicle(v) {
@@ -296,6 +297,14 @@ export async function markSold(vehicleId, payload, ctx) {
       status: "sold",
       soldAt: saleDate,
       soldPrice,
+      ...(payload.titleReceived !== undefined
+        ? { titleReceived: !!payload.titleReceived }
+        : {}),
+      ...(payload.titlePresent !== undefined
+        ? { titlePresent: !!payload.titlePresent }
+        : payload.titleReceived !== undefined
+          ? { titlePresent: !!payload.titleReceived }
+          : {}),
     },
   });
 
@@ -394,10 +403,10 @@ export async function markSold(vehicleId, payload, ctx) {
 }
 
 /**
- * Import a historically sold vehicle WITHOUT creating a deal jacket.
- * Sale data is stored on the vehicle (+ optional Deal for customer/tax/commission
- * autofill). hasDealJacket stays false until the dealer opens Create Deal Jacket
- * and saves — closing the import modal leaves the jacket uncreated.
+ * Import a historically sold vehicle and auto-create its deal jacket.
+ * Sale data is stored on the vehicle, a Deal record is created for
+ * customer/tax/commission tracking, and a completed DealJacket is
+ * created automatically so hasDealJacket is true from the start.
  */
 export async function importPreviousSold(payload, ctx) {
   const { dealershipId, userId, role, plan } = ctx;
@@ -465,7 +474,7 @@ export async function importPreviousSold(payload, ctx) {
       soldPrice,
       notes:
         payload.notes ||
-        "Imported as a previously sold vehicle. Deal jacket not created yet.",
+        "Imported as a previously sold vehicle.",
     },
   });
 
@@ -475,7 +484,7 @@ export async function importPreviousSold(payload, ctx) {
       dealershipId,
       fromStatus: null,
       toStatus: "sold",
-      note: "Historical import — previously sold vehicle (no deal jacket yet)",
+      note: "Historical import — previously sold vehicle",
       changedById: userId,
     },
   });
@@ -497,7 +506,7 @@ export async function importPreviousSold(payload, ctx) {
   const totalPriceOtd = roundMoney(soldPrice + salesTax + licenseFees);
   const profitNet = roundMoney(grossProfit - commissionAmount);
 
-  // Deal stores sale/customer data for jacket autofill — jacket itself is NOT created.
+  // Deal stores sale/customer data; deal jacket is auto-created below.
   const deal = await prisma.deal.create({
     data: {
       vehicleId: vehicle.id,
@@ -514,9 +523,62 @@ export async function importPreviousSold(payload, ctx) {
       commissionType: "manual",
       netProfit: profitNet,
       salesRepId,
-      notes: "Historical import — awaiting deal jacket",
+      notes: "Historical import",
       createdById: userId,
     },
+  });
+
+  // Auto-create the deal jacket for previously sold vehicles.
+  const jacketNumber = await nextJacketNumber(dealershipId);
+  let rosNumber = payload.rosNumber || null;
+  if (!rosNumber) {
+    try {
+      const generated = await generateDealNumber(dealershipId);
+      rosNumber = generated.rosNumber;
+    } catch (_) {
+      rosNumber = `DL-${Date.now().toString().slice(-5)}`;
+    }
+  }
+  const jacket = await prisma.dealJacket.create({
+    data: {
+      dealershipId,
+      vehicleId: vehicle.id,
+      customerId,
+      dealId: deal.id,
+      salesRepId,
+      jacketNumber,
+      soldPrice,
+      totalTax: salesTax,
+      totalSalePrice: totalPriceOtd,
+      downPayment: 0,
+      amountFinanced: 0,
+      balanceDue: totalPriceOtd,
+      totalInvested,
+      additionalExpenses: 0,
+      commissionAmount,
+      profitGross: grossProfit,
+      profitNet,
+      tradeInAllowance: 0,
+      warrantyAmount: 0,
+      gapAmount: 0,
+      fees: {},
+      lender: null,
+      rosNumber,
+      notes: payload.notes || "Imported as a previously sold vehicle.",
+      dealType: "Retail",
+      workflowStatus: "approved",
+      dateSold: payload.saleDate,
+      createdById: userId,
+    },
+  });
+
+  await createJacketActivity({
+    dealJacketId: jacket.id,
+    action: "created",
+    actorId: userId,
+    actorName: ctx.actorName ?? "User",
+    oldStatus: null,
+    newStatus: "approved",
   });
 
   const expenseRows = [];
@@ -575,7 +637,8 @@ export async function importPreviousSold(payload, ctx) {
       soldPrice,
       totalInvested,
       dealId: deal.id,
-      hasDealJacket: false,
+      dealJacketId: jacket.id,
+      hasDealJacket: true,
     },
     ipAddress: ctx.ipAddress,
   });
@@ -590,8 +653,8 @@ export async function importPreviousSold(payload, ctx) {
 
   return {
     deal: serializeRecord(deal),
-    dealJacket: null,
-    hasDealJacket: false,
+    dealJacket: serializeDealJacket(jacket),
+    hasDealJacket: true,
     vehicle: serializeVehicle(vehicleWithDeal),
   };
 }
@@ -616,7 +679,10 @@ export async function markLoss(vehicleId, payload, ctx) {
   const [updated] = await prisma.$transaction([
     prisma.vehicle.update({
       where: { id: vehicleId },
-      data: { status: "loss" },
+      data: {
+        status: "loss",
+        soldAt: vehicle.soldAt || new Date(),
+      },
     }),
     prisma.vehicleStatusHistory.create({
       data: {
@@ -648,7 +714,10 @@ export async function listSoldVehicles(dealershipId, query) {
   const where = {
     dealershipId,
     deletedAt: null,
-    status: "sold",
+    OR: [
+      { status: { in: ["sold", "loss", "wholesale", "out_of_state_sale"] } },
+      { soldAt: { not: null } },
+    ],
   };
 
   if (from || to) {

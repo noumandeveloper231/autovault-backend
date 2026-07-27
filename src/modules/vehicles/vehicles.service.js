@@ -295,13 +295,26 @@ export async function changeVehicleStatus(
     return serializeVehicle(existing);
   }
 
+  const exitStatuses = new Set([
+    "sold",
+    "loss",
+    "wholesale",
+    "out_of_state_sale",
+  ]);
   const [updated] = await prisma.$transaction([
     prisma.vehicle.update({
       where: { id: vehicleId },
       data: {
         status,
-        soldAt: status === "sold" ? new Date() : existing.soldAt,
-        isWholesale: status === "wholesale" ? true : (existing.status === "wholesale" ? false : existing.isWholesale),
+        soldAt: exitStatuses.has(status)
+          ? existing.soldAt || new Date()
+          : existing.soldAt,
+        isWholesale:
+          status === "wholesale"
+            ? true
+            : existing.status === "wholesale"
+              ? false
+              : existing.isWholesale,
       },
     }),
     prisma.vehicleStatusHistory.create({

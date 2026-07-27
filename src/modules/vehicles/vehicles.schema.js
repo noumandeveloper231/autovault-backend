@@ -52,6 +52,7 @@ export const createVehicleSchema = z.object({
   purchaseType: z.string().max(50).optional().nullable(),
   notes: z.string().max(5000).optional().nullable(),
   titleReceived: z.boolean().optional(),
+  titlePresent: z.boolean().optional(),
   flooringStartDate: z.coerce.date().optional().nullable(),
   flooringPlanId: z.string().uuid().optional().nullable(),
   status: vehicleStatus.optional(),

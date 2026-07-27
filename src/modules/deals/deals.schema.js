@@ -32,6 +32,8 @@ export const markSoldSchema = z
       .default("pending_review"),
     additionalExpenses: z.coerce.number().min(0).default(0),
     fees: z.any().default({}),
+    titleReceived: z.boolean().optional(),
+    titlePresent: z.boolean().optional(),
   })
   .refine(
     (d) => d.customerId || d.customerName,
