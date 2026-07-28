@@ -104,7 +104,7 @@ export async function createVehicle(dealershipId, data, createdById, ipAddress) 
     data: {
       dealershipId,
       createdById,
-      vin: data.vin,
+      vin: normalizedVin,
       stockNumber: data.stockNumber ?? null,
       make: data.make,
       model: data.model,

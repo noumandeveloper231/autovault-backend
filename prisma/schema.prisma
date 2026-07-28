@@ -472,7 +472,10 @@ model Vehicle {
   deal           Deal?
   dealJackets    DealJacket[]
 
-  @@unique([dealershipId, vin])
+  // Active VIN uniqueness is enforced by a partial unique index in SQL:
+  // vehicles_dealershipId_vin_active_key ON (dealershipId, vin) WHERE deletedAt IS NULL
+  // Soft-deleted rows keep their VIN so history remains intact and the VIN can be reused.
+  @@index([dealershipId, vin])
   @@index([dealershipId, status, deletedAt])
   @@index([dealershipId, stockNumber])
   @@map("vehicles")
