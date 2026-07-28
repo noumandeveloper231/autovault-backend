@@ -8,6 +8,7 @@ import { notFound, forbidden, conflict } from "../../common/errors.js";
 import { writeAuditLog } from "../../common/audit.js";
 import { pageMeta } from "../../common/validate.js";
 import { env } from "../../config/env.js";
+import { planHasFeature } from "../../utils/plans.js";
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 const ADMIN_ROLES = ["owner", "manager"];
@@ -15,6 +16,12 @@ const ADMIN_ROLES = ["owner", "manager"];
 async function assertAllowedRoleForPlan(dealershipId, role) {
   const dealership = await prisma.dealership.findUnique({ where: { id: dealershipId } });
   if (!dealership) return;
+
+  if (role === "cpa" && !planHasFeature(dealership.plan, "cpa")) {
+    throw forbidden(
+      "CPA login is available on Independent Dealers and Growing Dealerships plans.",
+    );
+  }
 
   if (dealership.plan === "independent_dealer") {
     if (role === "sales_rep") {

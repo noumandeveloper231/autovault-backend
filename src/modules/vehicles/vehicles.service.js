@@ -135,6 +135,8 @@ export async function createVehicle(dealershipId, data, createdById, ipAddress) 
       purchaseType: data.purchaseType ?? null,
       notes: data.notes ?? null,
       titleReceived: data.titleReceived ?? true,
+      titlePresent:
+        data.titlePresent ?? data.titleReceived ?? true,
       flooringStartDate: data.flooringStartDate ?? null,
       flooringPlanId: data.flooringPlanId ?? null,
       status: data.status ?? "in_stock",
@@ -163,7 +165,12 @@ export async function createVehicle(dealershipId, data, createdById, ipAddress) 
     entityType: "Vehicle",
     entityId: vehicle.id,
     action: "create",
-    newValues: { vin: vehicle.vin, stockNumber: vehicle.stockNumber },
+    newValues: {
+      vin: vehicle.vin,
+      stockNumber: vehicle.stockNumber,
+      titlePresent: vehicle.titlePresent,
+      titleReceived: vehicle.titleReceived,
+    },
     ipAddress,
   });
 
@@ -250,8 +257,16 @@ export async function updateVehicle(
     entityType: "Vehicle",
     entityId: vehicleId,
     action: "update",
-    oldValues: { vin: existing.vin },
-    newValues: { vin: withTotal.vin },
+    oldValues: {
+      vin: existing.vin,
+      titlePresent: existing.titlePresent,
+      titleReceived: existing.titleReceived,
+    },
+    newValues: {
+      vin: withTotal.vin,
+      titlePresent: withTotal.titlePresent,
+      titleReceived: withTotal.titleReceived,
+    },
     ipAddress,
   });
 

@@ -469,6 +469,10 @@ export async function importPreviousSold(payload, ctx) {
       flooringStartDate: flooring > 0 ? payload.acquisitionDate : null,
       totalInvested,
       titleReceived: payload.titleReceived !== false,
+      titlePresent:
+        payload.titlePresent !== undefined
+          ? !!payload.titlePresent
+          : payload.titleReceived !== false,
       status: "sold",
       soldAt: payload.saleDate,
       soldPrice,
@@ -639,6 +643,8 @@ export async function importPreviousSold(payload, ctx) {
       dealId: deal.id,
       dealJacketId: jacket.id,
       hasDealJacket: true,
+      titlePresent: vehicle.titlePresent,
+      titleReceived: vehicle.titleReceived,
     },
     ipAddress: ctx.ipAddress,
   });

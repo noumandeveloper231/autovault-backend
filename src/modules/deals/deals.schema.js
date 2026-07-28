@@ -64,6 +64,7 @@ export const previousSoldSchema = z
     salesTaxAmount: z.coerce.number().min(0).default(0),
     licenseFees: z.coerce.number().min(0).default(0),
     titleReceived: z.boolean().default(true),
+    titlePresent: z.boolean().optional(),
     customerName: z.string().min(1).optional(),
     customerPhone: z.string().optional(),
     customerEmail: z
