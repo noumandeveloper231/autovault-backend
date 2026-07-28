@@ -4,14 +4,24 @@ import {
   hashToken,
   randomToken,
 } from "../../common/auth-utils.js";
-import { notFound, forbidden, conflict } from "../../common/errors.js";
+import { notFound, forbidden, conflict, tooManyRequests } from "../../common/errors.js";
 import { writeAuditLog } from "../../common/audit.js";
 import { pageMeta } from "../../common/validate.js";
 import { env } from "../../config/env.js";
 import { planHasFeature } from "../../utils/plans.js";
 
 const INVITE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const INVITE_MAX_SENDS = 3;
+const INVITE_RESEND_COOLDOWN_MS = 10 * 60 * 1000;
 const ADMIN_ROLES = ["owner", "manager"];
+
+const INVITE_ROLE_LABELS = {
+  owner: "Dealer Admin",
+  manager: "Manager",
+  sales_rep: "Sales Rep",
+  cpa: "CPA / Accountant",
+  wholesale_dealer: "Wholesale Dealer",
+};
 
 async function assertAllowedRoleForPlan(dealershipId, role) {
   const dealership = await prisma.dealership.findUnique({ where: { id: dealershipId } });
@@ -66,17 +76,65 @@ export function serializeUser(user) {
 
 function serializeInvitation(invitation) {
   if (!invitation) return null;
+  const sendCount = invitation.sendCount ?? 1;
   return {
     id: invitation.id,
     email: invitation.email,
     role: invitation.role,
     fullName: invitation.fullName,
     status: invitation.status,
+    sendCount,
+    maxSends: INVITE_MAX_SENDS,
+    remainingSends: Math.max(0, INVITE_MAX_SENDS - sendCount),
+    lastSentAt: invitation.lastSentAt || invitation.createdAt,
     expiresAt: invitation.expiresAt,
     acceptedAt: invitation.acceptedAt,
     invitedById: invitation.invitedById,
     createdAt: invitation.createdAt,
   };
+}
+
+function minutesCeil(ms) {
+  return Math.max(1, Math.ceil(ms / 60000));
+}
+
+async function sendInvitationEmail({
+  email,
+  role,
+  fullName,
+  dealershipId,
+  acceptUrl,
+}) {
+  const dealership = await prisma.dealership.findUnique({
+    where: { id: dealershipId },
+    select: { name: true },
+  });
+  const roleLabel = INVITE_ROLE_LABELS[role] || String(role).replace(/_/g, " ");
+  const isCpa = role === "cpa";
+  const { sendEmail } = await import("../../utils/email.js");
+  const { userInvitationEmail } = await import("../../utils/email-templates.js");
+  await sendEmail({
+    to: email,
+    subject: isCpa
+      ? `You're invited to the CPA portal — ${dealership?.name || "AutoVault"}`
+      : `You're invited to AutoVault — ${dealership?.name || "AutoVault"}`,
+    html: userInvitationEmail({
+      name: fullName || null,
+      role,
+      roleLabel,
+      dealership: dealership?.name || null,
+      acceptUrl,
+      eyebrow: isCpa ? "CPA Portal Invitation" : "Team Invitation",
+      accent: isCpa ? "#2DD47F" : "#46D392",
+      bodyHtml: isCpa
+        ? `You've been invited as a <strong style="color:#EAECEF;">CPA / Accountant</strong>${
+            dealership?.name
+              ? ` for <span style="color:#EAECEF;font-weight:700;">${dealership.name}</span>`
+              : ""
+          }. You'll get a read-only portal to review P&amp;L, expenses, and tax numbers — without editing inventory or deals.`
+        : undefined,
+    }),
+  });
 }
 
 function assertManageableRole(role) {
@@ -256,35 +314,77 @@ export async function inviteUser(
       expiresAt: { gt: new Date() },
     },
   });
-  if (pendingInvite) {
-    throw conflict("A pending invitation already exists for this email.");
-  }
 
   const rawToken = randomToken(32);
   const tokenHash = hashToken(rawToken);
   const expiresAt = new Date(Date.now() + INVITE_TTL_MS);
-
-  const invitation = await prisma.invitation.create({
-    data: {
-      dealershipId,
-      email: data.email,
-      role: data.role,
-      fullName: data.fullName ?? null,
-      tokenHash,
-      expiresAt,
-      invitedById,
-    },
-  });
-
   const base = env.FRONTEND_URL.replace(/\/+$/, "");
   const acceptUrl = `${base}/accept-invitation?token=${encodeURIComponent(rawToken)}`;
+  const now = new Date();
+
+  let invitation;
+  let resent = false;
+
+  if (pendingInvite) {
+    const sendCount = pendingInvite.sendCount ?? 1;
+    if (sendCount >= INVITE_MAX_SENDS) {
+      throw conflict(
+        `This invitation was already sent ${INVITE_MAX_SENDS} times. Wait for the invitee to accept, or for the invite to expire.`,
+      );
+    }
+
+    const lastSent = pendingInvite.lastSentAt || pendingInvite.createdAt;
+    const elapsed = now.getTime() - new Date(lastSent).getTime();
+    if (elapsed < INVITE_RESEND_COOLDOWN_MS) {
+      const waitMs = INVITE_RESEND_COOLDOWN_MS - elapsed;
+      const mins = minutesCeil(waitMs);
+      throw tooManyRequests(
+        `Please wait ${mins} more minute${mins === 1 ? "" : "s"} before resending this invite.`,
+        {
+          retryAfterSeconds: Math.ceil(waitMs / 1000),
+          sendCount,
+          maxSends: INVITE_MAX_SENDS,
+          remainingSends: INVITE_MAX_SENDS - sendCount,
+        },
+      );
+    }
+
+    invitation = await prisma.invitation.update({
+      where: { id: pendingInvite.id },
+      data: {
+        tokenHash,
+        expiresAt,
+        role: data.role,
+        fullName: data.fullName ?? pendingInvite.fullName,
+        sendCount: sendCount + 1,
+        lastSentAt: now,
+        invitedById,
+      },
+    });
+    resent = true;
+  } else {
+    invitation = await prisma.invitation.create({
+      data: {
+        dealershipId,
+        email: data.email,
+        role: data.role,
+        fullName: data.fullName ?? null,
+        tokenHash,
+        expiresAt,
+        invitedById,
+        sendCount: 1,
+        lastSentAt: now,
+      },
+    });
+  }
 
   try {
-    const { sendEmail } = await import("../../utils/email.js");
-    await sendEmail({
-      to: data.email,
-      subject: "You're invited to AutoVault360",
-      html: `<p>You have been invited to join AutoVault360 as <strong>${data.role.replace("_", " ")}</strong>.</p><p><a href="${acceptUrl}">Accept invitation</a></p><p>This link expires in 7 days.</p>`,
+    await sendInvitationEmail({
+      email: data.email,
+      role: invitation.role,
+      fullName: invitation.fullName,
+      dealershipId,
+      acceptUrl,
     });
   } catch {
     // Email failure should not block invitation record
@@ -295,12 +395,19 @@ export async function inviteUser(
     changedById: invitedById,
     entityType: "Invitation",
     entityId: invitation.id,
-    action: "invite",
-    newValues: { email: data.email, role: data.role },
+    action: resent ? "invite_resend" : "invite",
+    newValues: {
+      email: data.email,
+      role: invitation.role,
+      sendCount: invitation.sendCount,
+    },
     ipAddress,
   });
 
-  return serializeInvitation(invitation);
+  return {
+    ...serializeInvitation(invitation),
+    resent,
+  };
 }
 
 export async function acceptInvitation(data, ipAddress) {

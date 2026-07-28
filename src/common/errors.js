@@ -24,6 +24,10 @@ export function conflict(message = "Conflict") {
   return new AppError(message, 409, "CONFLICT");
 }
 
+export function tooManyRequests(message = "Too many requests", details) {
+  return new AppError(message, 429, "TOO_MANY_REQUESTS", details);
+}
+
 export function validationError(message = "Validation failed", details) {
   return new AppError(message, 400, "VALIDATION_ERROR", details);
 }

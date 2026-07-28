@@ -56,7 +56,7 @@ export async function inviteUser(req, res) {
     req.auth.userId,
     clientIp(req),
   );
-  return res.status(201).json({ invitation });
+  return res.status(invitation.resent ? 200 : 201).json({ invitation });
 }
 
 export async function acceptInvitation(req, res) {

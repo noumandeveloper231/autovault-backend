@@ -392,6 +392,8 @@ model Invitation {
   fullName     String?
   tokenHash    String
   status       InvitationStatus @default(pending)
+  sendCount    Int              @default(1)
+  lastSentAt   DateTime         @default(now())
   invitedById  String?          @db.Uuid
   invitedBy    User?            @relation("InvitationInviter", fields: [invitedById], references: [id])
   expiresAt    DateTime

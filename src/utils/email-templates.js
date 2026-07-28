@@ -74,7 +74,27 @@ registerTemplate("subscriptionWelcome", ({ name, loginEmail, temporaryPassword, 
   `;
 });
 
-registerTemplate("userInvitation", ({ role, acceptUrl }) => `
+registerTemplate("userInvitation", ({
+  name,
+  role,
+  roleLabel,
+  dealership,
+  acceptUrl,
+  eyebrow,
+  accent,
+  bodyHtml,
+}) => {
+  const label =
+    roleLabel ||
+    String(role || "team member").replace(/_/g, " ");
+  const badge = eyebrow || "Team Invitation";
+  const accentColor = accent || "#46D392";
+  const greeting = name ? `Hi ${name},` : "You've been invited.";
+  const dealershipBit = dealership
+    ? ` for <span style="color:#EAECEF;font-weight:700;">${dealership}</span>`
+    : "";
+  const defaultBody = `You have been invited to join AutoVault as <strong style="color:#EAECEF;">${label}</strong>${dealershipBit}. Accept below to set your password and activate your login.`;
+  return `
   <div style="margin:0;padding:0;background:#0A0D10;color:#EAECEF;font-family:Inter,Arial,sans-serif;">
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#0A0D10;padding:28px 12px;">
       <tr>
@@ -83,13 +103,32 @@ registerTemplate("userInvitation", ({ role, acceptUrl }) => `
             <tr>
               <td style="padding:28px 28px 18px 28px;background:linear-gradient(160deg,#12161B 40%,#173021 100%);border-bottom:1px solid #232A32;">
                 <div style="font-family:'Space Grotesk',Inter,Arial,sans-serif;font-size:24px;font-weight:700;letter-spacing:-0.01em;color:#EAECEF;">AutoVault</div>
-                <div style="margin-top:10px;color:#46D392;font-size:12px;letter-spacing:0.12em;text-transform:uppercase;font-weight:700;">Team Invitation</div>
-                <h1 style="margin:14px 0 0 0;font-family:'Space Grotesk',Inter,Arial,sans-serif;font-size:28px;line-height:1.15;color:#EAECEF;">You've been invited.</h1>
+                <div style="margin-top:10px;color:${accentColor};font-size:12px;letter-spacing:0.12em;text-transform:uppercase;font-weight:700;">${badge}</div>
+                <h1 style="margin:14px 0 0 0;font-family:'Space Grotesk',Inter,Arial,sans-serif;font-size:28px;line-height:1.15;color:#EAECEF;">${greeting}</h1>
               </td>
             </tr>
             <tr>
               <td style="padding:22px 28px 26px 28px;">
-                <p style="margin:0 0 12px 0;color:#A5AFBC;font-size:15px;line-height:1.6;">You have been invited to join AutoVault360 as <strong style="color:#EAECEF;">${role.replace("_", " ")}</strong>.</p>
+                <p style="margin:0 0 12px 0;color:#A5AFBC;font-size:15px;line-height:1.6;">${bodyHtml || defaultBody}</p>
+
+                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#0F1419;border:1px solid #232A32;border-radius:12px;margin-top:6px;">
+                  <tr>
+                    <td style="padding:16px 16px 6px 16px;color:#8B95A1;font-size:12px;text-transform:uppercase;letter-spacing:0.08em;">Role</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:0 16px 14px 16px;color:${accentColor};font-size:16px;font-weight:700;">${label}</td>
+                  </tr>
+                  ${
+                    dealership
+                      ? `<tr>
+                    <td style="padding:16px 16px 6px 16px;color:#8B95A1;font-size:12px;text-transform:uppercase;letter-spacing:0.08em;border-top:1px solid #232A32;">Dealership</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:0 16px 16px 16px;color:#EAECEF;font-size:16px;font-weight:600;">${dealership}</td>
+                  </tr>`
+                      : ""
+                  }
+                </table>
 
                 <table role="presentation" cellspacing="0" cellpadding="0" style="margin-top:18px;">
                   <tr>
@@ -99,7 +138,7 @@ registerTemplate("userInvitation", ({ role, acceptUrl }) => `
                   </tr>
                 </table>
 
-                <p style="margin:18px 0 0 0;color:#8B95A1;font-size:13px;line-height:1.6;">This link expires in 7 days.</p>
+                <p style="margin:18px 0 0 0;color:#8B95A1;font-size:13px;line-height:1.6;">This link expires in 7 days. If you were not expecting this invite, you can ignore this email.</p>
               </td>
             </tr>
           </table>
@@ -107,7 +146,8 @@ registerTemplate("userInvitation", ({ role, acceptUrl }) => `
       </tr>
     </table>
   </div>
-`);
+`;
+});
 
 registerTemplate("taxReminder", ({ ownerName, dealershipName, rows, dashboardUrl }) => `
   <div style="margin:0;padding:0;background:#0A0D10;color:#EAECEF;font-family:Inter,Arial,sans-serif;">
@@ -347,6 +387,10 @@ export function subscriptionWelcomeEmail(data) {
 
 export function salesRepWelcomeEmail(data) {
   return renderTemplate("salesRepWelcome", data);
+}
+
+export function userInvitationEmail(data) {
+  return renderTemplate("userInvitation", data);
 }
 
 export function billingUpcomingReminderEmail(data) {
