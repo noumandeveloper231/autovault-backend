@@ -238,11 +238,12 @@ export async function forgotPassword(email) {
   const resetUrl = `${base}/reset-password?token=${encodeURIComponent(rawToken)}`;
 
   const { sendEmail } = await import("../../utils/email.js");
+  const { resetPasswordEmail } = await import("../../utils/email-templates.js");
   try {
     await sendEmail({
       to: user.email,
       subject: "Reset your AutoVault password",
-      html: `<p>Hi ${user.fullName},</p><p><a href="${resetUrl}">Reset your password</a>. This link expires in 1 hour.</p>`,
+      html: resetPasswordEmail({ name: user.fullName, email: user.email, resetUrl }),
     });
   } catch (err) {
     const { logger } = await import("../../common/logger.js");

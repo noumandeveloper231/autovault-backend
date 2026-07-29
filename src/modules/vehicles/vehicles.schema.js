@@ -79,6 +79,14 @@ export const updateVehicleSchema = createVehicleSchema
     soldPrice: z.coerce.number().min(0).optional().nullable(),
     fees: feesSchema.optional(),
     additionalExpenses: z.coerce.number().min(0).optional(),
+    // Deal Jacket autosave — synced onto Deal / DealJacket, not Vehicle columns
+    salesTaxAmount: z.coerce.number().min(0).optional().nullable(),
+    licenseFees: z.coerce.number().min(0).optional().nullable(),
+    rosNumber: z.string().max(40).optional().nullable(),
+    commissionAmount: z.coerce.number().min(0).optional().nullable(),
+    commissionRate: z.coerce.number().min(0).max(1).optional().nullable(),
+    commissionType: z.enum(["percentage", "manual"]).optional().nullable(),
+    saleDate: z.coerce.date().optional().nullable(),
   })
   .refine((d) => Object.keys(d).length > 0, { message: "No fields to update" });
 

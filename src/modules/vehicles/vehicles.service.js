@@ -177,6 +177,16 @@ export async function createVehicle(dealershipId, data, createdById, ipAddress) 
   return serializeVehicle(updated);
 }
 
+const DEAL_SYNC_KEYS = [
+  "salesTaxAmount",
+  "licenseFees",
+  "rosNumber",
+  "commissionAmount",
+  "commissionRate",
+  "commissionType",
+  "saleDate",
+];
+
 export async function updateVehicle(
   dealershipId,
   vehicleId,
@@ -186,22 +196,8 @@ export async function updateVehicle(
 ) {
   const existing = await findVehicleRecord(dealershipId, vehicleId);
 
-  const moneyKeys = [
-    "acquisitionCost",
-    "auctionFees",
-    "askingPrice",
-    "flooringFees",
-    "registrationFees",
-    "soldPrice",
-    "reconditioningCost",
-  ];
-  const touchesMoney = moneyKeys.some((k) => data[k] !== undefined);
-  if (
-    touchesMoney &&
-    (existing.status === "sold" || existing.status === "loss")
-  ) {
-    throw conflict("Sold or loss vehicles cannot have pricing edited.");
-  }
+  // Allow cost / sold-price corrections from Deal Jacket (mock parity).
+  // Previously blocked sold/loss money edits, which made DJ inline edits a no-op.
 
   const normalizedVin = data.vin ? data.vin.toUpperCase().trim() : null;
 
@@ -209,7 +205,7 @@ export async function updateVehicle(
     const duplicate = await prisma.vehicle.findFirst({
       where: {
         dealershipId,
-      vin: normalizedVin,
+        vin: normalizedVin,
         deletedAt: null,
         id: { not: vehicleId },
       },
@@ -228,46 +224,165 @@ export async function updateVehicle(
     (data.askingPrice !== undefined && data.askingPrice !== toDecimal(existing.askingPrice)) ||
     (data.marketValue !== undefined && data.marketValue !== toDecimal(existing.marketValue));
 
+  const dealSync = {};
+  for (const key of DEAL_SYNC_KEYS) {
+    if (data[key] !== undefined) dealSync[key] = data[key];
+  }
+
   const updateData = { ...data };
   if (normalizedVin) updateData.vin = normalizedVin;
   delete updateData.status;
+  for (const key of DEAL_SYNC_KEYS) delete updateData[key];
 
-  const updated = await prisma.vehicle.update({
+  await prisma.vehicle.update({
     where: { id: vehicleId },
     data: updateData,
   });
 
-  // Keep linked Deal Customer in sync so Deal Jacket reloads persist
-  // customer name/phone/email/address after refresh.
+  // Keep linked Deal + Customer + Jacket in sync for Deal Jacket autosave.
+  const deal = await prisma.deal.findFirst({
+    where: { vehicleId, dealershipId, deletedAt: null },
+    select: {
+      id: true,
+      customerId: true,
+      salesTaxAmount: true,
+      licenseFees: true,
+      soldPriceBeforeTax: true,
+      commissionAmount: true,
+      commissionRate: true,
+      commissionType: true,
+      rosNumber: true,
+      notes: true,
+      saleDate: true,
+      totalPriceOtd: true,
+    },
+  });
+
   const customerFieldsTouched =
     data.customerName !== undefined ||
     data.customerPhone !== undefined ||
     data.customerEmail !== undefined ||
     data.customerAddress !== undefined;
-  if (customerFieldsTouched) {
-    const deal = await prisma.deal.findFirst({
+
+  if (deal?.customerId && customerFieldsTouched) {
+    const customerPatch = {};
+    if (data.customerName !== undefined) {
+      const name = (data.customerName || "").trim();
+      if (name) customerPatch.name = name;
+    }
+    if (data.customerPhone !== undefined) {
+      customerPatch.phone = data.customerPhone || null;
+    }
+    if (data.customerEmail !== undefined) {
+      customerPatch.email = data.customerEmail || null;
+    }
+    if (data.customerAddress !== undefined) {
+      customerPatch.address = data.customerAddress || null;
+    }
+    if (Object.keys(customerPatch).length) {
+      await prisma.customer.update({
+        where: { id: deal.customerId },
+        data: customerPatch,
+      });
+    }
+  }
+
+  if (deal) {
+    const dealPatch = {};
+    if (dealSync.salesTaxAmount !== undefined) {
+      dealPatch.salesTaxAmount = dealSync.salesTaxAmount ?? 0;
+    }
+    if (dealSync.licenseFees !== undefined) {
+      dealPatch.licenseFees = dealSync.licenseFees ?? 0;
+    }
+    if (data.soldPrice !== undefined) {
+      dealPatch.soldPriceBeforeTax = data.soldPrice;
+    }
+    if (dealSync.commissionAmount !== undefined) {
+      dealPatch.commissionAmount = dealSync.commissionAmount;
+    }
+    if (dealSync.commissionRate !== undefined) {
+      dealPatch.commissionRate = dealSync.commissionRate;
+    }
+    if (dealSync.commissionType !== undefined) {
+      dealPatch.commissionType = dealSync.commissionType;
+    }
+    if (dealSync.rosNumber !== undefined) {
+      dealPatch.rosNumber = dealSync.rosNumber || null;
+    }
+    if (data.notes !== undefined) {
+      dealPatch.notes = data.notes || null;
+    }
+    if (dealSync.saleDate !== undefined && dealSync.saleDate) {
+      dealPatch.saleDate = dealSync.saleDate;
+    }
+
+    const nextSold =
+      data.soldPrice !== undefined
+        ? toDecimal(data.soldPrice)
+        : toDecimal(deal.soldPriceBeforeTax);
+    const nextTax =
+      dealSync.salesTaxAmount !== undefined
+        ? toDecimal(dealSync.salesTaxAmount)
+        : toDecimal(deal.salesTaxAmount);
+    const nextLic =
+      dealSync.licenseFees !== undefined
+        ? toDecimal(dealSync.licenseFees)
+        : toDecimal(deal.licenseFees);
+    if (
+      data.soldPrice !== undefined ||
+      dealSync.salesTaxAmount !== undefined ||
+      dealSync.licenseFees !== undefined
+    ) {
+      dealPatch.totalPriceOtd = nextSold + nextTax + nextLic;
+    }
+
+    if (Object.keys(dealPatch).length) {
+      await prisma.deal.update({ where: { id: deal.id }, data: dealPatch });
+    }
+
+    const jacket = await prisma.dealJacket.findFirst({
       where: { vehicleId, dealershipId, deletedAt: null },
-      select: { customerId: true },
+      orderBy: { createdAt: "desc" },
     });
-    if (deal?.customerId) {
-      const customerPatch = {};
-      if (data.customerName !== undefined) {
-        const name = (data.customerName || "").trim();
-        if (name) customerPatch.name = name;
+    if (jacket) {
+      const jacketPatch = {};
+      if (data.soldPrice !== undefined) jacketPatch.soldPrice = data.soldPrice;
+      if (dealSync.salesTaxAmount !== undefined) {
+        jacketPatch.totalTax = dealSync.salesTaxAmount ?? 0;
       }
-      if (data.customerPhone !== undefined) {
-        customerPatch.phone = data.customerPhone || null;
+      if (
+        data.soldPrice !== undefined ||
+        dealSync.salesTaxAmount !== undefined ||
+        dealSync.licenseFees !== undefined
+      ) {
+        jacketPatch.totalSalePrice = nextSold + nextTax + nextLic;
       }
-      if (data.customerEmail !== undefined) {
-        customerPatch.email = data.customerEmail || null;
+      if (dealSync.commissionAmount !== undefined) {
+        jacketPatch.commissionAmount = dealSync.commissionAmount ?? 0;
       }
-      if (data.customerAddress !== undefined) {
-        customerPatch.address = data.customerAddress || null;
+      if (dealSync.rosNumber !== undefined) {
+        jacketPatch.rosNumber = dealSync.rosNumber || null;
       }
-      if (Object.keys(customerPatch).length) {
-        await prisma.customer.update({
-          where: { id: deal.customerId },
-          data: customerPatch,
+      if (data.notes !== undefined) jacketPatch.notes = data.notes || null;
+      if (dealSync.saleDate !== undefined && dealSync.saleDate) {
+        jacketPatch.dateSold = dealSync.saleDate;
+      }
+      if (data.soldPrice !== undefined) {
+        const invested = toDecimal(jacket.totalInvested);
+        const commission = toDecimal(
+          dealSync.commissionAmount !== undefined
+            ? dealSync.commissionAmount
+            : jacket.commissionAmount,
+        );
+        const gross = nextSold - invested;
+        jacketPatch.profitGross = gross;
+        jacketPatch.profitNet = gross - commission;
+      }
+      if (Object.keys(jacketPatch).length) {
+        await prisma.dealJacket.update({
+          where: { id: jacket.id },
+          data: jacketPatch,
         });
       }
     }
@@ -285,7 +400,22 @@ export async function updateVehicle(
     });
   }
 
-  const withTotal = await recalculateTotalInvested(vehicleId);
+  await recalculateTotalInvested(vehicleId);
+
+  const withRelations = await prisma.vehicle.findFirst({
+    where: { id: vehicleId, dealershipId, deletedAt: null },
+    include: {
+      flooringPlan: true,
+      expenses: { where: { deletedAt: null }, orderBy: { repairDate: "desc" } },
+      deal: { include: { customer: true, salesRep: true } },
+      dealJackets: {
+        where: { deletedAt: null },
+        take: 1,
+        orderBy: { createdAt: "desc" },
+        include: { documents: { orderBy: { uploadedAt: "desc" } } },
+      },
+    },
+  });
 
   await writeAuditLog({
     dealershipId,
@@ -299,14 +429,14 @@ export async function updateVehicle(
       titleReceived: existing.titleReceived,
     },
     newValues: {
-      vin: withTotal.vin,
-      titlePresent: withTotal.titlePresent,
-      titleReceived: withTotal.titleReceived,
+      vin: withRelations?.vin,
+      titlePresent: withRelations?.titlePresent,
+      titleReceived: withRelations?.titleReceived,
     },
     ipAddress,
   });
 
-  return serializeVehicle(withTotal);
+  return serializeVehicle(withRelations);
 }
 
 export async function deleteVehicle(
