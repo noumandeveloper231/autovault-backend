@@ -1,13 +1,11 @@
 import { prisma } from "../../lib/prisma.js";
 import { conflict, notFound, validationError } from "../../common/errors.js";
-import { serializeRegistration, PLAN_SLUG_TO_LABEL } from "../../utils/plans.js";
+import { serializeRegistration } from "../../utils/plans.js";
 import { hashToken, verifyCompletionToken } from "../../utils/tokens.js";
 import { stripe } from "../../lib/stripe.js";
 import { portalForPlan } from "../../common/auth-utils.js";
-import { activateFromRegistration } from "../dealerships/dealership.service.js";
-import { sendEmail } from "../../utils/email.js";
-import { subscriptionWelcomeEmail } from "../../utils/email-templates.js";
-import { env } from "../../config/env.js";
+import { logger } from "../../common/logger.js";
+import { sendWelcomeIfNeeded } from "./welcome-email.js";
 
 function loginPathForPlan(plan) {
   const portal = portalForPlan(plan);
@@ -99,38 +97,30 @@ export async function completeRegistration(token) {
             stripeSubscriptionId: subId || registration.stripeSubscriptionId,
           },
         });
-        const updated = await prisma.registration.findUnique({ where: { id: registration.id } });
-        if (updated && !updated.dealershipId) {
-          try {
-            const result = await activateFromRegistration(updated);
-            temporaryPassword = result.temporaryPassword;
-            if (temporaryPassword) {
-              const base = env.FRONTEND_URL.replace(/\/+$/, "");
-              await sendEmail({
-                to: updated.email,
-                subject: "Your AutoVault plan is active",
-                html: subscriptionWelcomeEmail({
-                  name: updated.name,
-                  loginEmail: updated.email,
-                  temporaryPassword,
-                  dealership: updated.dealershipName,
-                  plan: PLAN_SLUG_TO_LABEL[updated.plan] || updated.plan,
-                  monthlyFee: updated.monthlyFee,
-                  loginUrl: `${base}${loginPathForPlan(updated.plan)}`,
-                }),
-              });
-              await prisma.registration.update({
-                where: { id: registration.id },
-                data: { emailSentAt: new Date() },
-              });
-            }
-          } catch {
-            // best-effort — webhook may create it
-          }
-        }
       }
-    } catch {
-      // Stripe lookup is best-effort
+    } catch (err) {
+      logger.warn(
+        { err, registrationId: registration.id },
+        "Stripe session lookup failed during registration complete",
+      );
+    }
+  }
+
+  // Only activate + email after payment (status active), or if already active.
+  const current = await prisma.registration.findUnique({
+    where: { id: registration.id },
+  });
+  if (current?.status === "active") {
+    try {
+      const welcome = await sendWelcomeIfNeeded(registration.id);
+      if (welcome?.temporaryPassword) {
+        temporaryPassword = welcome.temporaryPassword;
+      }
+    } catch (err) {
+      logger.error(
+        { err, registrationId: registration.id },
+        "Welcome email failed during registration complete",
+      );
     }
   }
 
@@ -179,7 +169,7 @@ export async function listRegistrations(q) {
   const rows = await prisma.registration.findMany({
     where,
     orderBy: { createdAt: "desc" },
+    take: 200,
   });
-
   return { registrations: rows.map(serializeRegistration) };
 }

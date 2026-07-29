@@ -1,5 +1,6 @@
 import { prisma } from "../../lib/prisma.js";
 import { toNum, roundMoney } from "../../common/serialize.js";
+import { sumExpensesInRange } from "../expenses/recurring-expenses.js";
 
 function defaultDateRange(from, to) {
   const now = new Date();
@@ -35,17 +36,32 @@ export async function profitLoss(dealershipId, { from, to } = {}) {
   );
   const gross = roundMoney(revenue - cogs);
 
-  const dealershipExpenses = await prisma.dealershipExpense.aggregate({
+  // Include one-time expenses in-range plus recurring templates that
+  // carry forward into months covered by the period.
+  const expenseRows = await prisma.dealershipExpense.findMany({
     where: {
       dealershipId,
       deletedAt: null,
-      expenseDate: { gte: range.from, lte: range.to },
+      OR: [
+        { expenseDate: { gte: range.from, lte: range.to } },
+        {
+          isRecurring: true,
+          expenseDate: { lte: range.to },
+          NOT: { recurringFrequency: "One-Time" },
+        },
+      ],
     },
-    _sum: { amount: true },
+    select: {
+      amount: true,
+      expenseDate: true,
+      isRecurring: true,
+      recurringFrequency: true,
+      vehicleVin: true,
+    },
   });
-  const operatingExpenses = roundMoney(
-    toNum(dealershipExpenses._sum.amount) ?? 0,
-  );
+  const operatingExpenses = sumExpensesInRange(expenseRows, range.from, range.to, {
+    excludeVehicleVin: true,
+  });
 
   const commissionsPaid = await prisma.salesRepCommission.aggregate({
     where: {
@@ -60,9 +76,7 @@ export async function profitLoss(dealershipId, { from, to } = {}) {
     toNum(commissionsPaid._sum.commissionAmount) ?? 0,
   );
 
-  const net = roundMoney(
-    gross - operatingExpenses - commissionsTotal,
-  );
+  const net = roundMoney(gross - operatingExpenses - commissionsTotal);
 
   return {
     period: {

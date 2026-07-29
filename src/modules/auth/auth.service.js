@@ -244,8 +244,9 @@ export async function forgotPassword(email) {
       subject: "Reset your AutoVault password",
       html: `<p>Hi ${user.fullName},</p><p><a href="${resetUrl}">Reset your password</a>. This link expires in 1 hour.</p>`,
     });
-  } catch {
-    // Do not reveal whether email exists
+  } catch (err) {
+    const { logger } = await import("../../common/logger.js");
+    logger.error({ err, email: user.email }, "forgot-password email failed");
   }
 
   return { message: "If that email exists, a reset link has been sent." };

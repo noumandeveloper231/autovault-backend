@@ -2,6 +2,9 @@ import { prisma } from "../../lib/prisma.js";
 import { notFound, conflict } from "../../common/errors.js";
 import { toNum, serializeRecord } from "../../common/serialize.js";
 import { pageMeta } from "../../common/validate.js";
+import {
+  expenseAmountInRange,
+} from "../expenses/recurring-expenses.js";
 
 function resolveRange(query = {}) {
   if (query.from || query.to) {
@@ -410,38 +413,65 @@ export async function listExpenses(dealershipId, query = {}) {
   const where = {
     dealershipId,
     deletedAt: null,
-    expenseDate: { gte: range.from, lte: range.to },
+    OR: [
+      { expenseDate: { gte: range.from, lte: range.to } },
+      {
+        isRecurring: true,
+        expenseDate: { lte: range.to },
+        NOT: { recurringFrequency: "One-Time" },
+      },
+    ],
   };
   if (category) where.category = category;
   if (status) where.status = status;
   if (q) {
-    where.OR = [
-      { name: { contains: q, mode: "insensitive" } },
-      { vendor: { contains: q, mode: "insensitive" } },
-      { category: { contains: q, mode: "insensitive" } },
+    where.AND = [
+      {
+        OR: [
+          { name: { contains: q, mode: "insensitive" } },
+          { vendor: { contains: q, mode: "insensitive" } },
+          { category: { contains: q, mode: "insensitive" } },
+        ],
+      },
     ];
   }
 
-  const [total, rows] = await Promise.all([
-    prisma.dealershipExpense.count({ where }),
-    prisma.dealershipExpense.findMany({
-      where,
-      orderBy: { expenseDate: "desc" },
-      skip: (page - 1) * limit,
-      take: limit,
-    }),
-  ]);
+  const rows = await prisma.dealershipExpense.findMany({
+    where,
+    orderBy: { expenseDate: "desc" },
+  });
 
-  const expenses = rows.map(serializeExpense);
+  // Expand recurring templates into period occurrences for list + totals.
+  const expanded = [];
+  for (const row of rows) {
+    const amountInRange = expenseAmountInRange(row, range.from, range.to);
+    if (!amountInRange) continue;
+    const serialized = serializeExpense(row);
+    const isRecurring =
+      !!row.isRecurring &&
+      row.recurringFrequency &&
+      row.recurringFrequency !== "One-Time";
+    const start = row.expenseDate instanceof Date ? row.expenseDate : new Date(row.expenseDate);
+    const inNativeRange =
+      start >= range.from && start <= range.to;
+    expanded.push({
+      ...serialized,
+      amount: isRecurring ? amountInRange : serialized.amount,
+      carriedForward: isRecurring && !inNativeRange,
+    });
+  }
+
+  const total = expanded.length;
+  const pageRows = expanded.slice((page - 1) * limit, page * limit);
   return {
-    expenses,
+    expenses: pageRows,
     meta: pageMeta(total, page, limit),
     totals: {
-      amount: expenses.reduce((s, e) => s + (e.amount || 0), 0),
-      paid: expenses
+      amount: expanded.reduce((s, e) => s + (e.amount || 0), 0),
+      paid: expanded
         .filter((e) => e.status === "paid")
         .reduce((s, e) => s + (e.amount || 0), 0),
-      unpaid: expenses
+      unpaid: expanded
         .filter((e) => e.status !== "paid")
         .reduce((s, e) => s + (e.amount || 0), 0),
     },

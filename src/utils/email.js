@@ -1,6 +1,7 @@
 import { BrevoClient } from "@getbrevo/brevo";
 import { env } from "../config/env.js";
 import { renderTemplate, getTemplate } from "./email-templates.js";
+import { logger } from "../common/logger.js";
 
 const brevo = env.BREVO_API_KEY
   ? new BrevoClient({ apiKey: env.BREVO_API_KEY, maxRetries: 2 })
@@ -18,8 +19,21 @@ function normalizeRecipients(recipients) {
 }
 
 function getSender(sender) {
-  if (sender) return { name: sender.name || env.BREVO_SENDER_NAME, email: sender.email || env.BREVO_SENDER_EMAIL };
+  if (sender) {
+    return {
+      name: sender.name || env.BREVO_SENDER_NAME,
+      email: sender.email || env.BREVO_SENDER_EMAIL,
+    };
+  }
   return { name: env.BREVO_SENDER_NAME, email: env.BREVO_SENDER_EMAIL };
+}
+
+function formatBrevoError(err) {
+  return {
+    status: err?.statusCode || err?.status || err?.response?.status,
+    body: err?.body || err?.response?.body || null,
+    message: err?.message || String(err),
+  };
 }
 
 export async function sendEmail({
@@ -35,7 +49,7 @@ export async function sendEmail({
   attachments,
 }) {
   if (!brevo) {
-    console.log("[email] BREVO_API_KEY missing. Email not sent.", { to, subject });
+    logger.warn({ to, subject }, "[email] BREVO_API_KEY missing. Email not sent.");
     return null;
   }
 
@@ -44,7 +58,9 @@ export async function sendEmail({
     throw new Error("sendEmail: at least one recipient is required");
   }
 
-  const renderedHtml = templateName ? renderTemplate(templateName, templateData || {}) : html;
+  const renderedHtml = templateName
+    ? renderTemplate(templateName, templateData || {})
+    : html;
 
   if (!renderedHtml) {
     throw new Error("sendEmail: html or templateName is required");
@@ -59,7 +75,12 @@ export async function sendEmail({
 
   if (cc) payload.cc = normalizeRecipients(cc);
   if (bcc) payload.bcc = normalizeRecipients(bcc);
-  if (replyTo) payload.replyTo = typeof replyTo === "string" ? { email: replyTo } : { email: replyTo.email, name: replyTo.name };
+  if (replyTo) {
+    payload.replyTo =
+      typeof replyTo === "string"
+        ? { email: replyTo }
+        : { email: replyTo.email, name: replyTo.name };
+  }
 
   if (attachments?.length) {
     payload.attachment = attachments.map((a) => ({
@@ -68,13 +89,36 @@ export async function sendEmail({
     }));
   }
 
-  const result = await brevo.transactionalEmails.sendTransacEmail(payload);
-  return result;
+  try {
+    const result = await brevo.transactionalEmails.sendTransacEmail(payload);
+    logger.info(
+      {
+        to: toRecipients.map((r) => r.email),
+        subject,
+        messageId: result?.messageId || result?.body?.messageId || null,
+      },
+      "[email] sent",
+    );
+    return result;
+  } catch (err) {
+    logger.error(
+      {
+        ...formatBrevoError(err),
+        to: toRecipients.map((r) => r.email),
+        subject,
+      },
+      "[email] send failed",
+    );
+    throw err;
+  }
 }
 
 export async function sendBulkEmails(emails) {
   if (!brevo) {
-    console.log("[email] BREVO_API_KEY missing. Bulk emails not sent.", { count: emails.length });
+    logger.warn(
+      { count: emails.length },
+      "[email] BREVO_API_KEY missing. Bulk emails not sent.",
+    );
     return [];
   }
 

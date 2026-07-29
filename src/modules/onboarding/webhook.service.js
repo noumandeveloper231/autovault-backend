@@ -1,20 +1,9 @@
-import { randomUUID } from "crypto";
 import { prisma } from "../../lib/prisma.js";
 import { stripe } from "../../lib/stripe.js";
 import { env } from "../../config/env.js";
-import { sendEmail } from "../../utils/email.js";
-import { subscriptionWelcomeEmail } from "../../utils/email-templates.js";
-import {
-  portalForPlan,
-  hashPassword,
-  generateTemporaryPassword,
-} from "../../common/auth-utils.js";
-import {
-  PLAN_SLUG_TO_LABEL,
-  PLAN_MONTHLY_FEE,
-} from "../../utils/plans.js";
-import { activateFromRegistration } from "../dealerships/dealership.service.js";
+import { PLAN_MONTHLY_FEE } from "../../utils/plans.js";
 import { logger } from "../../common/logger.js";
+import { sendWelcomeIfNeeded } from "./welcome-email.js";
 import {
   upsertBillingPaymentFromInvoice,
   maybeCreateAutoExpense,
@@ -22,97 +11,6 @@ import {
   getStripePriceAmount,
   periodEndFromSubscription,
 } from "../billing/billing.service.js";
-
-function loginPathForPlan(plan) {
-  const portal = portalForPlan(plan);
-  if (portal === "wholesale") return "/wholesale/login";
-  if (portal === "sales_rep") return "/sales-rep/login";
-  return "/login";
-}
-
-async function sendWelcomeIfNeeded(registrationId) {
-  const registration = await prisma.registration.findUnique({
-    where: { id: registrationId },
-  });
-  if (!registration || registration.emailSentAt) return;
-
-  const lockId = randomUUID();
-  const locked = await prisma.registration.updateMany({
-    where: {
-      id: registrationId,
-      emailSentAt: null,
-      welcomeEmailLockId: null,
-    },
-    data: { welcomeEmailLockId: lockId },
-  });
-  if (!locked.count) return;
-
-  let temporaryPassword = null;
-  let reg = registration;
-
-  try {
-    if (!reg.dealershipId) {
-      const activated = await activateFromRegistration(reg);
-      reg = await prisma.registration.findUnique({ where: { id: registrationId } });
-      temporaryPassword = activated.temporaryPassword;
-    } else if (!reg.temporaryPasswordHash) {
-      temporaryPassword = generateTemporaryPassword();
-      const passwordHash = await hashPassword(temporaryPassword);
-      await prisma.user.updateMany({
-        where: { email: reg.email, dealershipId: reg.dealershipId },
-        data: { passwordHash, mustResetPassword: true },
-      });
-      await prisma.registration.update({
-        where: { id: reg.id },
-        data: {
-          temporaryPasswordHash: passwordHash,
-          temporaryPasswordSentAt: new Date(),
-        },
-      });
-    }
-
-    if (!temporaryPassword) {
-      reg = await prisma.registration.findUnique({ where: { id: registrationId } });
-      await prisma.registration.updateMany({
-        where: { id: registrationId, welcomeEmailLockId: lockId },
-        data: { welcomeEmailLockId: null },
-      });
-      return;
-    }
-
-    const base = env.FRONTEND_URL.replace(/\/+$/, "");
-    const loginPath = loginPathForPlan(reg.plan);
-
-    await sendEmail({
-      to: reg.email,
-      subject: "Your AutoVault plan is active",
-      html: subscriptionWelcomeEmail({
-        name: reg.name,
-        loginEmail: reg.email,
-        temporaryPassword,
-        dealership: reg.dealershipName,
-        plan: PLAN_SLUG_TO_LABEL[reg.plan] || reg.plan,
-        monthlyFee: reg.monthlyFee,
-        loginUrl: `${base}${loginPath}`,
-      }),
-    });
-
-    await prisma.registration.update({
-      where: { id: registrationId },
-      data: {
-        emailSentAt: new Date(),
-        temporaryPasswordSentAt: new Date(),
-        welcomeEmailLockId: null,
-      },
-    });
-  } catch (error) {
-    await prisma.registration.updateMany({
-      where: { id: registrationId, welcomeEmailLockId: lockId },
-      data: { welcomeEmailLockId: null },
-    });
-    throw error;
-  }
-}
 
 async function findDealershipForStripe({
   dealershipId,
