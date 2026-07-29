@@ -8,7 +8,7 @@ export const upsertRegistrationSchema = z
     phone: z.string().trim().min(7).max(30).optional().or(z.literal("")),
     dealership: z.string().trim().min(2).max(150).optional(),
     dealershipName: z.string().trim().min(2).max(150).optional(),
-    city: z.string().trim().min(2).max(80),
+    zipCode: z.string().trim().min(2).max(20),
     state: z
       .string()
       .trim()
@@ -30,7 +30,7 @@ export const upsertRegistrationSchema = z
     email: data.email,
     phone: data.phone || "",
     dealershipName: (data.dealershipName || data.dealership || "").trim(),
-    city: data.city,
+    zipCode: data.zipCode,
     state: data.state,
   }));
 

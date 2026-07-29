@@ -32,7 +32,7 @@ export async function upsertRegistration(data) {
         name: data.name,
         phone: data.phone || "",
         dealershipName: data.dealershipName,
-        city: data.city,
+        zipCode: data.zipCode,
         state: data.state,
       },
     });
@@ -45,7 +45,7 @@ export async function upsertRegistration(data) {
       email: data.email,
       phone: data.phone || "",
       dealershipName: data.dealershipName,
-      city: data.city,
+      zipCode: data.zipCode,
       state: data.state,
     },
   });
@@ -150,7 +150,8 @@ export async function completeRegistration(token) {
     registration: {
       ...serializeRegistration(fresh),
       loginPath: loginPathForPlan(fresh.plan),
-      loginEmail: fresh.email,
+      loginEmail: fresh.email || payload.email || null,
+      email: fresh.email || payload.email || null,
       temporaryPassword,
     },
   };
@@ -169,7 +170,7 @@ export async function listRegistrations(q) {
           { name: { contains: q, mode: "insensitive" } },
           { email: { contains: q, mode: "insensitive" } },
           { dealershipName: { contains: q, mode: "insensitive" } },
-          { city: { contains: q, mode: "insensitive" } },
+          { zipCode: { contains: q, mode: "insensitive" } },
           { state: { contains: q, mode: "insensitive" } },
         ],
       }

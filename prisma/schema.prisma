@@ -176,7 +176,8 @@ model Registration {
   email                    String             @unique
   phone                    String             @default("")
   dealershipName           String
-  city                     String
+  city                     String?
+  zipCode                  String  @default("")
   state                    String
   plan                     PlanSlug?
   status                   RegistrationStatus @default(pending)
@@ -197,7 +198,7 @@ model Registration {
   updatedAt                DateTime           @updatedAt
 
   @@index([state])
-  @@index([city])
+  @@index([zipCode])
   @@index([stripeCustomerId])
   @@index([stripeCheckoutSessionId])
   @@map("registrations")

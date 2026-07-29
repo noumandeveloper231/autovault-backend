@@ -47,6 +47,7 @@ export async function createCheckout({ registrationId, plan }) {
   const token = createCompletionToken({
     registrationId: registration.id,
     plan,
+    email: registration.email,
   });
 
   const session = await stripe.checkout.sessions.create({
@@ -64,7 +65,7 @@ export async function createCheckout({ registrationId, plan }) {
       plan,
       completionToken: token,
     },
-    success_url: `${FRONTEND_BASE}/thank-you?token=${encodeURIComponent(token)}`,
+    success_url: `${FRONTEND_BASE}/thank-you?token=${encodeURIComponent(token)}&email=${encodeURIComponent(registration.email || "")}`,
     cancel_url: `${FRONTEND_BASE}/?checkout=cancel`,
   });
 

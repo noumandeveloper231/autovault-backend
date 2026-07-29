@@ -105,7 +105,7 @@ export async function activateFromRegistration(registration, tx = prisma) {
         slug,
         email: registration.email,
         phone: registration.phone || null,
-        city: registration.city,
+        zip: registration.zipCode,
         state: registration.state,
         plan: registration.plan,
         status: "active",

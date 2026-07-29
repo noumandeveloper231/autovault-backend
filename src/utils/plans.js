@@ -122,7 +122,7 @@ export function serializeRegistration(reg) {
     phone: reg.phone,
     dealership: reg.dealershipName,
     dealershipName: reg.dealershipName,
-    city: reg.city,
+    zipCode: reg.zipCode,
     state: reg.state,
     plan: reg.plan,
     planLabel: PLAN_SLUG_TO_LABEL[reg.plan] || "Dealership Plan",
