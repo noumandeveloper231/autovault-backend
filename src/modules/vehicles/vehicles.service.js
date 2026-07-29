@@ -237,6 +237,42 @@ export async function updateVehicle(
     data: updateData,
   });
 
+  // Keep linked Deal Customer in sync so Deal Jacket reloads persist
+  // customer name/phone/email/address after refresh.
+  const customerFieldsTouched =
+    data.customerName !== undefined ||
+    data.customerPhone !== undefined ||
+    data.customerEmail !== undefined ||
+    data.customerAddress !== undefined;
+  if (customerFieldsTouched) {
+    const deal = await prisma.deal.findFirst({
+      where: { vehicleId, dealershipId, deletedAt: null },
+      select: { customerId: true },
+    });
+    if (deal?.customerId) {
+      const customerPatch = {};
+      if (data.customerName !== undefined) {
+        const name = (data.customerName || "").trim();
+        if (name) customerPatch.name = name;
+      }
+      if (data.customerPhone !== undefined) {
+        customerPatch.phone = data.customerPhone || null;
+      }
+      if (data.customerEmail !== undefined) {
+        customerPatch.email = data.customerEmail || null;
+      }
+      if (data.customerAddress !== undefined) {
+        customerPatch.address = data.customerAddress || null;
+      }
+      if (Object.keys(customerPatch).length) {
+        await prisma.customer.update({
+          where: { id: deal.customerId },
+          data: customerPatch,
+        });
+      }
+    }
+  }
+
   if (pricingChanged) {
     await prisma.pricingHistory.create({
       data: {

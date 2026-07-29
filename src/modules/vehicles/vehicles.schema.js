@@ -57,6 +57,10 @@ export const createVehicleSchema = z.object({
   flooringPlanId: z.string().uuid().optional().nullable(),
   status: vehicleStatus.optional(),
   isWholesale: z.boolean().optional(),
+  customerName: z.string().max(120).optional().nullable(),
+  customerPhone: z.string().max(30).optional().nullable(),
+  customerEmail: z.string().max(120).optional().nullable(),
+  customerAddress: z.string().max(500).optional().nullable(),
 });
 
 const addOnItemSchema = z.object({

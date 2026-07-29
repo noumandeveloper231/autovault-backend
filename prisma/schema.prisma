@@ -460,6 +460,10 @@ model Vehicle {
   titlePresent          Boolean       @default(true)
   fees                  Json          @default("{}")
   additionalExpenses    Decimal       @default(0) @db.Decimal(12, 2)
+  customerName          String?
+  customerPhone         String?
+  customerEmail         String?
+  customerAddress       String?
   createdById           String?       @db.Uuid
   createdBy             User?         @relation("VehicleCreatedBy", fields: [createdById], references: [id])
   createdAt             DateTime      @default(now())
