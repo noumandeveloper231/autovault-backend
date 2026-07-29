@@ -80,7 +80,7 @@ async function main() {
   }
 
   console.log(`[seed-cpa] Dealership: ${dealership.name} (${dealership.id})`);
-  console.log(`[seed-cpa] Login: /cpa/login`);
+  console.log(`[seed-cpa] Login: /login`);
   console.log(`[seed-cpa] Email: ${email}`);
   console.log(`[seed-cpa] Password: ${password}`);
 }

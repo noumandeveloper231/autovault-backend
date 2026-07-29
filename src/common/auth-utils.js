@@ -39,11 +39,9 @@ export function dashboardPathForPortal(portal) {
   return "/dashboard";
 }
 
+/** Shared login for all dealership portals; owner keeps a separate page. */
 export function loginPathForPortal(portal) {
-  if (portal === "wholesale") return "/wholesale/login";
-  if (portal === "sales_rep") return "/sales-rep/login";
   if (portal === "owner") return "/owner/login";
-  if (portal === "cpa") return "/cpa/login";
   return "/login";
 }
 

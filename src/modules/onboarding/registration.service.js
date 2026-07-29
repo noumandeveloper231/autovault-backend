@@ -3,15 +3,12 @@ import { conflict, notFound, validationError } from "../../common/errors.js";
 import { serializeRegistration } from "../../utils/plans.js";
 import { hashToken, verifyCompletionToken } from "../../utils/tokens.js";
 import { stripe } from "../../lib/stripe.js";
-import { portalForPlan } from "../../common/auth-utils.js";
+import { loginPathForPortal, portalForPlan } from "../../common/auth-utils.js";
 import { logger } from "../../common/logger.js";
 import { sendWelcomeIfNeeded } from "./welcome-email.js";
 
 function loginPathForPlan(plan) {
-  const portal = portalForPlan(plan);
-  if (portal === "wholesale") return "/wholesale/login";
-  if (portal === "sales_rep") return "/sales-rep/login";
-  return "/login";
+  return loginPathForPortal(portalForPlan(plan));
 }
 
 export async function upsertRegistration(data) {

@@ -244,7 +244,7 @@ registerTemplate("salesRepWelcome", ({ name, username, loginEmail, temporaryPass
                 <table role="presentation" cellspacing="0" cellpadding="0" style="margin-top:18px;">
                   <tr>
                     <td style="border-radius:10px;background:#8B5CF6;">
-                      <a href="${loginUrl}" style="display:inline-block;padding:12px 24px;color:#ffffff;text-decoration:none;font-size:14px;font-weight:700;">Open Sales Rep Login</a>
+                      <a href="${loginUrl}" style="display:inline-block;padding:12px 24px;color:#ffffff;text-decoration:none;font-size:14px;font-weight:700;">Open AutoVault Login</a>
                     </td>
                   </tr>
                 </table>

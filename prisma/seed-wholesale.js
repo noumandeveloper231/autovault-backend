@@ -80,7 +80,7 @@ async function main() {
     console.log(`[seed-wholesale] Created user: ${email}`);
   }
 
-  console.log(`[seed-wholesale] Login: /wholesale/login`);
+  console.log(`[seed-wholesale] Login: /login`);
   console.log(`[seed-wholesale] Email: ${email}`);
   console.log(`[seed-wholesale] Password: ${password}`);
 }

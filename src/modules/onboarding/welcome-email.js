@@ -4,20 +4,14 @@ import { env } from "../../config/env.js";
 import { sendEmail } from "../../utils/email.js";
 import { subscriptionWelcomeEmail } from "../../utils/email-templates.js";
 import {
-  portalForPlan,
   hashPassword,
   generateTemporaryPassword,
+  loginPathForPortal,
+  portalForPlan,
 } from "../../common/auth-utils.js";
 import { PLAN_SLUG_TO_LABEL } from "../../utils/plans.js";
 import { activateFromRegistration } from "../dealerships/dealership.service.js";
 import { logger } from "../../common/logger.js";
-
-function loginPathForPlan(plan) {
-  const portal = portalForPlan(plan);
-  if (portal === "wholesale") return "/wholesale/login";
-  if (portal === "sales_rep") return "/sales-rep/login";
-  return "/login";
-}
 
 /**
  * Send the post-signup credentials email once. Safe to call from both
@@ -88,7 +82,7 @@ export async function sendWelcomeIfNeeded(registrationId) {
     }
 
     const base = env.FRONTEND_URL.replace(/\/+$/, "");
-    const loginPath = loginPathForPlan(reg.plan);
+    const loginPath = loginPathForPortal(portalForPlan(reg.plan));
 
     await sendEmail({
       to: reg.email,

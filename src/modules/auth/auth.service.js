@@ -17,19 +17,10 @@ import {
   AppError,
   unauthorized,
   validationError,
+  forbidden,
 } from "../../common/errors.js";
 import { writeAuditLog } from "../../common/audit.js";
 import { env } from "../../config/env.js";
-
-function normalizePortal(input) {
-  const value = String(input || "").trim().toLowerCase();
-  if (value === "sales-rep") return "sales_rep";
-  if (value === "sales_rep") return "sales_rep";
-  if (value === "wholesale") return "wholesale";
-  if (value === "owner") return "owner";
-  if (value === "cpa") return "cpa";
-  return "admin";
-}
 
 function allowedPortalForUser(user, dealership) {
   return portalForRole(user.role);
@@ -98,7 +89,7 @@ async function issueTokenPair(user, ipAddress) {
   };
 }
 
-export async function login({ email, password, portal: requestedPortal }, ipAddress) {
+export async function login({ email, password }, ipAddress) {
   const user = await loadUserWithDealership(email);
   if (!user || !user.isActive) {
     throw unauthorized("Invalid email or password.");
@@ -109,30 +100,29 @@ export async function login({ email, password, portal: requestedPortal }, ipAddr
     throw unauthorized("Invalid email or password.");
   }
 
-  if (user.role !== "platform_owner") {
-    if (!user.dealership || user.dealership.deletedAt) {
-      throw forbidden("No active dealership on this account.");
-    }
-    if (user.dealership.status !== "active") {
-      throw forbidden("Your plan is not active yet. Complete checkout first.");
-    }
-  }
-
-  const allowedPortal = allowedPortalForUser(user, user.dealership);
-  const normalizedPortal = normalizePortal(requestedPortal);
-
-  if (normalizedPortal !== allowedPortal) {
+  // Platform owners use the separate /owner/login flow.
+  if (user.role === "platform_owner") {
     throw new AppError(
-      `Your plan can only access the ${allowedPortal.replace("_", " ")} portal.`,
+      "Platform owners must sign in at the owner login page.",
       403,
       "FORBIDDEN",
       {
-        allowedPortal,
-        redirectLoginPath: loginPathForPortal(allowedPortal),
-        redirectDashboardPath: dashboardPathForPortal(allowedPortal),
+        allowedPortal: "owner",
+        redirectLoginPath: "/owner/login",
+        redirectDashboardPath: "/owner/dashboard",
       },
     );
   }
+
+  if (!user.dealership || user.dealership.deletedAt) {
+    throw forbidden("No active dealership on this account.");
+  }
+  if (user.dealership.status !== "active") {
+    throw forbidden("Your plan is not active yet. Complete checkout first.");
+  }
+
+  // Role determines the portal — one shared /login for all dealership users.
+  const allowedPortal = allowedPortalForUser(user, user.dealership);
 
   await prisma.user.update({
     where: { id: user.id },
@@ -144,6 +134,7 @@ export async function login({ email, password, portal: requestedPortal }, ipAddr
   return {
     ...tokens,
     user: serializeUser(user, user.dealership),
+    redirectLoginPath: loginPathForPortal(allowedPortal),
     redirectDashboardPath: dashboardPathForPortal(allowedPortal),
   };
 }

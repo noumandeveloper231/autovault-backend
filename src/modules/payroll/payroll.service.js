@@ -219,7 +219,7 @@ async function sendRepInviteEmail(user, temporaryPassword, dealershipId) {
   });
 
   const base = env.FRONTEND_URL.replace(/\/+$/, "");
-  const loginUrl = `${base}/login?portal=sales_rep`;
+  const loginUrl = `${base}/login`;
 
   await sendEmail({
     to: user.email,

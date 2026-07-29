@@ -7,6 +7,7 @@ import {
 } from "../utils/email-templates.js";
 import { env } from "../config/env.js";
 import { PLAN_SLUG_TO_LABEL } from "../utils/plans.js";
+import { dashboardPathForPortal, portalForPlan } from "../common/auth-utils.js";
 import { logger } from "../common/logger.js";
 import {
   ensureStripeSubscriptionLinked,
@@ -77,7 +78,6 @@ export async function runBillingReminders() {
     },
   });
 
-  const dashboardUrl = `${env.FRONTEND_URL.replace(/\/+$/, "")}/dashboard/#payment-settings`;
   const results = [];
 
   for (let dealership of dealerships) {
@@ -89,6 +89,7 @@ export async function runBillingReminders() {
         continue;
       }
 
+      const dashboardUrl = `${env.FRONTEND_URL.replace(/\/+$/, "")}${dashboardPathForPortal(portalForPlan(dealership.plan))}/#payment-settings`;
       const days = daysUntil(dealership.currentPeriodEnd);
       const planLabel =
         PLAN_SLUG_TO_LABEL[dealership.plan] || dealership.plan || "AutoVault";

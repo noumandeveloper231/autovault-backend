@@ -12,11 +12,22 @@ import {
   PLAN_MONTHLY_FEE,
   toApiPaymentStatus,
 } from "../../utils/plans.js";
+import { dashboardPathForPortal, portalForPlan } from "../../common/auth-utils.js";
 
 const FRONTEND_BASE = env.FRONTEND_URL.replace(/\/+$/, "");
-const DASH_BILLING_SUCCESS = `${FRONTEND_BASE}/dashboard/?billing=success#payment-settings`;
-const DASH_BILLING_CANCEL = `${FRONTEND_BASE}/dashboard/?billing=cancel#payment-settings`;
-const DASH_BILLING_PORTAL = `${FRONTEND_BASE}/dashboard/?billing=portal#payment-settings`;
+
+function billingReturnUrls(dealershipOrPlan) {
+  const plan =
+    typeof dealershipOrPlan === "string"
+      ? dealershipOrPlan
+      : dealershipOrPlan?.plan;
+  const dash = dashboardPathForPortal(portalForPlan(plan));
+  return {
+    success: `${FRONTEND_BASE}${dash}/?billing=success#payment-settings`,
+    cancel: `${FRONTEND_BASE}${dash}/?billing=cancel#payment-settings`,
+    portal: `${FRONTEND_BASE}${dash}/?billing=portal#payment-settings`,
+  };
+}
 
 let _priceCache = { at: 0, bySlug: {} };
 const PRICE_CACHE_MS = 5 * 60 * 1000;
@@ -447,6 +458,7 @@ export async function createBillingCheckout(dealershipId, { action, plan }) {
   if (!dealership.stripeCustomerId) {
     throw conflict("Billing not linked; contact support.");
   }
+  const returns = billingReturnUrls(dealership);
 
   if (action === "pay_due") {
     const open = await stripe.invoices.list({
@@ -480,8 +492,8 @@ export async function createBillingCheckout(dealershipId, { action, plan }) {
         action: "pay_due",
         invoiceId: invoice.id,
       },
-      success_url: DASH_BILLING_SUCCESS,
-      cancel_url: DASH_BILLING_CANCEL,
+      success_url: returns.success,
+      cancel_url: returns.cancel,
     });
     return { url: session.url };
   }
@@ -519,8 +531,8 @@ export async function createBillingCheckout(dealershipId, { action, plan }) {
         action: "upgrade",
         oldSubscriptionId: dealership.stripeSubscriptionId || "",
       },
-      success_url: DASH_BILLING_SUCCESS,
-      cancel_url: DASH_BILLING_CANCEL,
+      success_url: returns.success,
+      cancel_url: returns.cancel,
     });
     return { url: session.url };
   }
@@ -536,7 +548,7 @@ export async function createBillingPortal(dealershipId) {
   }
   const session = await stripe.billingPortal.sessions.create({
     customer: dealership.stripeCustomerId,
-    return_url: DASH_BILLING_PORTAL,
+    return_url: billingReturnUrls(dealership).portal,
   });
   return { url: session.url };
 }

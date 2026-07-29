@@ -10,6 +10,7 @@ function legacyLoginResponse(res, result) {
     token: result.accessToken,
     refreshToken: result.refreshToken,
     user: result.user,
+    redirectLoginPath: result.redirectLoginPath,
     redirectDashboardPath: result.redirectDashboardPath,
   });
 }
@@ -19,6 +20,7 @@ function v1TokenResponse(res, result) {
     accessToken: result.accessToken,
     refreshToken: result.refreshToken,
     user: result.user,
+    redirectLoginPath: result.redirectLoginPath,
     redirectDashboardPath: result.redirectDashboardPath,
   });
 }
