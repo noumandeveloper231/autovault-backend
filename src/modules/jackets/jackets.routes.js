@@ -20,6 +20,7 @@ import {
   rejectJacketSchema,
   approveJacketSchema,
   addDocumentSchema,
+  syncDocumentsSchema,
   jacketIdParamSchema,
   jacketDocumentParamSchema,
 } from "./jackets.schema.js";
@@ -118,6 +119,14 @@ router.post(
   validateParams(jacketIdParamSchema),
   validateBody(addDocumentSchema),
   asyncHandler(ctrl.addDocument),
+);
+
+router.put(
+  "/:id/documents/sync",
+  requireRoles(...writeRoles),
+  validateParams(jacketIdParamSchema),
+  validateBody(syncDocumentsSchema),
+  asyncHandler(ctrl.syncDocuments),
 );
 
 router.delete(

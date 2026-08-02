@@ -63,6 +63,12 @@ export const addDocumentSchema = z.object({
   fileType: z.string().default("application/pdf"),
 });
 
+/** Diff-based document sync: keep these IDs, delete the rest, optionally add new. */
+export const syncDocumentsSchema = z.object({
+  keepDocumentIds: z.array(z.string().uuid()).default([]),
+  addDocuments: z.array(addDocumentSchema).default([]),
+});
+
 export const checkDealNumberQuerySchema = z.object({
   rosNumber: z.string().min(1).max(40),
   /** Exclude this jacket id when editing an existing jacket */

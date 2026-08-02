@@ -15,6 +15,7 @@
     "db:studio": "prisma studio",
     "db:seed": "node prisma/seed.js",
     "db:seed:cpa": "node prisma/seed-cpa.js",
+    "db:seed:vehicles": "node prisma/seed-vehicles.js",
     "db:seed:wholesale": "node prisma/seed-wholesale.js",
     "db:delete-user": "node prisma/delete-user.js",
     "r2:cors": "node scripts/configure-r2-cors.mjs",

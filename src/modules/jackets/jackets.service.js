@@ -4,8 +4,41 @@ import { writeAuditLog } from "../../common/audit.js";
 import { toNum, roundMoney } from "../../common/serialize.js";
 import { pageMeta } from "../../common/validate.js";
 import { compressDataUrl } from "../../utils/image-compress.js";
+import { env } from "../../config/env.js";
+import { deleteR2Object, isR2Configured } from "../../lib/r2.js";
 
 const FINAL_STATUSES = ["approved", "rejected"];
+
+/**
+ * Best-effort extract of an R2 object key from a stored file URL.
+ * Deal-jacket docs store public URLs (or data: URLs) — only R2 keys are purged.
+ */
+function storageKeyFromFileUrl(fileUrl) {
+  if (!fileUrl || typeof fileUrl !== "string") return null;
+  if (fileUrl.startsWith("data:")) return null;
+  const base = (env.R2_PUBLIC_BASE_URL || "").replace(/\/$/, "");
+  if (base && fileUrl.startsWith(base + "/")) {
+    return decodeURIComponent(fileUrl.slice(base.length + 1));
+  }
+  try {
+    const u = new URL(fileUrl);
+    const path = u.pathname.replace(/^\//, "");
+    return path ? decodeURIComponent(path) : null;
+  } catch {
+    return null;
+  }
+}
+
+async function purgeJacketFile(fileUrl) {
+  if (!isR2Configured()) return;
+  const key = storageKeyFromFileUrl(fileUrl);
+  if (!key) return;
+  try {
+    await deleteR2Object(key);
+  } catch {
+    // DB row is already gone / about to go — R2 purge can be retried later
+  }
+}
 
 export async function nextJacketNumber(dealershipId, tx = prisma) {
   const count = await tx.dealJacket.count({
@@ -832,6 +865,7 @@ export async function removeDocument(id, documentId, dealershipId, ctx) {
   if (!doc) throw notFound("Document not found.");
 
   await prisma.dealJacketDocument.delete({ where: { id: documentId } });
+  await purgeJacketFile(doc.fileUrl);
 
   await logTransition(jacket, "document_removed", ctx, {
     oldStatus: jacket.workflowStatus,
@@ -842,6 +876,67 @@ export async function removeDocument(id, documentId, dealershipId, ctx) {
   return {
     id: doc.id,
     documentName: doc.documentName,
+  };
+}
+
+/**
+ * Sync deal-jacket documents to a desired final set:
+ * - keepDocumentIds: existing docs to keep
+ * - any DB doc NOT in keepDocumentIds is deleted (DB + R2)
+ * - addDocuments: new uploads to create after removals
+ *
+ * This is the "previous vs after" diff the client wants: send the IDs that
+ * should remain; missing ones are treated as removed.
+ */
+export async function syncDocuments(id, dealershipId, payload, ctx) {
+  const jacket = await getJacketOrThrow(id, dealershipId);
+  assertSalesRepAccess(jacket, ctx, true);
+
+  const keepIds = new Set(
+    Array.isArray(payload.keepDocumentIds) ? payload.keepDocumentIds : [],
+  );
+  const existing = await prisma.dealJacketDocument.findMany({
+    where: { dealJacketId: id },
+  });
+
+  const removed = [];
+  for (const doc of existing) {
+    if (keepIds.has(doc.id)) continue;
+    await prisma.dealJacketDocument.delete({ where: { id: doc.id } });
+    await purgeJacketFile(doc.fileUrl);
+    removed.push({ id: doc.id, documentName: doc.documentName });
+  }
+
+  if (removed.length) {
+    await logTransition(jacket, "documents_synced_removed", ctx, {
+      oldStatus: jacket.workflowStatus,
+      newStatus: jacket.workflowStatus,
+      detail: { removedCount: removed.length, removed },
+    });
+  }
+
+  const added = [];
+  const toAdd = Array.isArray(payload.addDocuments) ? payload.addDocuments : [];
+  for (const item of toAdd) {
+    const created = await addDocument(id, dealershipId, item, ctx);
+    added.push(created);
+  }
+
+  const finalDocs = await prisma.dealJacketDocument.findMany({
+    where: { dealJacketId: id },
+    orderBy: { uploadedAt: "desc" },
+  });
+
+  return {
+    removed,
+    added,
+    documents: finalDocs.map((d) => ({
+      id: d.id,
+      fileUrl: d.fileUrl,
+      documentName: d.documentName,
+      fileType: d.fileType,
+      uploadedAt: d.uploadedAt,
+    })),
   };
 }
 
