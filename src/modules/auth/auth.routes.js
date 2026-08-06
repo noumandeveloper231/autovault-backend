@@ -1,4 +1,5 @@
 import express from "express";
+import rateLimit from "express-rate-limit";
 import { asyncHandler } from "../../common/error-handler.js";
 import { validateBody } from "../../common/validate.js";
 import { authenticate } from "../../common/auth-middleware.js";
@@ -11,6 +12,14 @@ import {
 } from "./auth.schema.js";
 import * as ctrl from "./auth.controller.js";
 
+const forgotPasswordLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Too many password reset requests. Try again later." },
+});
+
 const v1Router = express.Router();
 
 v1Router.post("/login", validateBody(loginSchema), asyncHandler(ctrl.loginV1));
@@ -19,6 +28,7 @@ v1Router.post("/logout", asyncHandler(ctrl.logout));
 v1Router.get("/me", authenticate, asyncHandler(ctrl.me));
 v1Router.post(
   "/forgot-password",
+  forgotPasswordLimiter,
   validateBody(forgotPasswordSchema),
   asyncHandler(ctrl.forgotPassword),
 );

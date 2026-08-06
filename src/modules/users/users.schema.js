@@ -1,4 +1,14 @@
 import { z } from "zod";
+import {
+  isStrongPassword,
+  STRONG_PASSWORD_MESSAGE,
+} from "../../common/auth-utils.js";
+
+const strongPassword = z
+  .string()
+  .min(8)
+  .max(128)
+  .refine(isStrongPassword, { message: STRONG_PASSWORD_MESSAGE });
 
 const inviteableRoles = z.enum([
   "owner",
@@ -30,7 +40,7 @@ export const listUsersQuerySchema = z.object({
 
 export const createUserSchema = z.object({
   email: z.string().email().transform((v) => v.toLowerCase().trim()),
-  password: z.string().min(8).max(128),
+  password: strongPassword,
   fullName: z.string().min(1).max(150),
   phone: z.string().max(30).optional().nullable(),
   role: inviteableRoles,
@@ -44,7 +54,7 @@ export const updateUserSchema = z
     role: inviteableRoles.optional(),
     imageUrl: z.string().url().optional().nullable(),
     isActive: z.boolean().optional(),
-    password: z.string().min(8).max(128).optional(),
+    password: strongPassword.optional(),
   })
   .refine((d) => Object.keys(d).length > 0, { message: "No fields to update" });
 
@@ -56,7 +66,7 @@ export const inviteUserSchema = z.object({
 
 export const acceptInvitationSchema = z.object({
   token: z.string().min(1),
-  password: z.string().min(8).max(128),
+  password: strongPassword,
   fullName: z.string().min(1).max(150).optional(),
 });
 

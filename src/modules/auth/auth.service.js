@@ -60,7 +60,7 @@ async function loadUserWithDealership(email) {
   });
 }
 
-async function issueTokenPair(user, ipAddress) {
+async function issueTokenPair(user, ipAddress, opts = {}) {
   const jti = crypto.randomUUID();
   const refreshToken = signRefreshToken(user, jti);
   const decoded = jwt.decode(refreshToken);
@@ -74,14 +74,16 @@ async function issueTokenPair(user, ipAddress) {
     },
   });
 
-  await writeAuditLog({
-    dealershipId: user.dealershipId,
-    changedById: user.id,
-    entityType: "User",
-    entityId: user.id,
-    action: "login",
-    ipAddress,
-  });
+  if (!opts.skipAudit) {
+    await writeAuditLog({
+      dealershipId: user.dealershipId,
+      changedById: user.id,
+      entityType: "User",
+      entityId: user.id,
+      action: opts.auditAction || "login",
+      ipAddress,
+    });
+  }
 
   return {
     accessToken: signAccessToken(user),
@@ -281,19 +283,37 @@ export async function resetPassword({ token, password }) {
 export async function changePassword(userId, { currentPassword, newPassword }) {
   const user = await prisma.user.findFirst({
     where: { id: userId, deletedAt: null, isActive: true },
+    include: { dealership: true },
   });
   if (!user) throw unauthorized("Session is no longer valid.");
 
   if (!user.mustResetPassword) {
+    if (!currentPassword) {
+      throw validationError("Current password is required.");
+    }
     const valid = await verifyPassword(currentPassword, user.passwordHash);
     if (!valid) throw unauthorized("Current password is incorrect.");
   }
 
+  const sameAsCurrent = await verifyPassword(newPassword, user.passwordHash);
+  if (sameAsCurrent) {
+    throw validationError("New password must be different from your current password.");
+  }
+
   const passwordHash = await hashPassword(newPassword);
-  await prisma.user.update({
-    where: { id: userId },
-    data: { passwordHash, mustResetPassword: false },
-  });
+  await prisma.$transaction([
+    prisma.user.update({
+      where: { id: userId },
+      data: { passwordHash, mustResetPassword: false },
+    }),
+    prisma.refreshToken.updateMany({
+      where: { userId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    }),
+  ]);
+
+  const refreshedUser = { ...user, mustResetPassword: false, passwordHash };
+  const tokens = await issueTokenPair(refreshedUser, null, { skipAudit: true });
 
   await writeAuditLog({
     dealershipId: user.dealershipId,
@@ -303,7 +323,13 @@ export async function changePassword(userId, { currentPassword, newPassword }) {
     action: "password_changed",
   });
 
-  return { message: "Password updated successfully." };
+  return {
+    message: "Password updated successfully.",
+    accessToken: tokens.accessToken,
+    refreshToken: tokens.refreshToken,
+    token: tokens.accessToken,
+    user: serializeUser(refreshedUser, user.dealership),
+  };
 }
 
 export async function loginPlatformOwner({ email, password }, ipAddress) {

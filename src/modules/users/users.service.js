@@ -198,6 +198,7 @@ export async function createUser(dealershipId, data, changedById, ipAddress) {
       imageUrl: data.imageUrl ?? null,
       role: data.role,
       dealershipId,
+      mustResetPassword: true,
     },
   });
 
@@ -233,12 +234,22 @@ export async function updateUser(
   if (data.role !== undefined) updateData.role = data.role;
   if (data.imageUrl !== undefined) updateData.imageUrl = data.imageUrl;
   if (data.isActive !== undefined) updateData.isActive = data.isActive;
-  if (data.password) updateData.passwordHash = await hashPassword(data.password);
+  if (data.password) {
+    updateData.passwordHash = await hashPassword(data.password);
+    updateData.mustResetPassword = true;
+  }
 
   const updated = await prisma.user.update({
     where: { id: userId },
     data: updateData,
   });
+
+  if (data.password) {
+    await prisma.refreshToken.updateMany({
+      where: { userId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+  }
 
   await writeAuditLog({
     dealershipId,
@@ -250,7 +261,7 @@ export async function updateUser(
     newValues: serializeUser(updated),
     ipAddress,
   });
-//update
+
   return serializeUser(updated);
 }
 
@@ -386,8 +397,32 @@ export async function inviteUser(
       dealershipId,
       acceptUrl,
     });
-  } catch {
-    // Email failure should not block invitation record
+  } catch (err) {
+    const { logger } = await import("../../common/logger.js");
+    logger.error(
+      { err, email: data.email, invitationId: invitation.id },
+      "invitation email failed",
+    );
+    await writeAuditLog({
+      dealershipId,
+      changedById: invitedById,
+      entityType: "Invitation",
+      entityId: invitation.id,
+      action: resent ? "invite_resend" : "invite",
+      newValues: {
+        email: data.email,
+        role: invitation.role,
+        sendCount: invitation.sendCount,
+        emailSent: false,
+      },
+      ipAddress,
+    });
+    return {
+      ...serializeInvitation(invitation),
+      resent,
+      emailSent: false,
+      warning: "Invite saved, but the email could not be sent. Try resending.",
+    };
   }
 
   await writeAuditLog({
@@ -400,6 +435,7 @@ export async function inviteUser(
       email: data.email,
       role: invitation.role,
       sendCount: invitation.sendCount,
+      emailSent: true,
     },
     ipAddress,
   });
@@ -407,6 +443,7 @@ export async function inviteUser(
   return {
     ...serializeInvitation(invitation),
     resent,
+    emailSent: true,
   };
 }
 

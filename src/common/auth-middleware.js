@@ -1,8 +1,17 @@
 import { verifyAccessToken } from "./auth-utils.js";
-import { unauthorized, forbidden } from "./errors.js";
+import { unauthorized, forbidden, AppError } from "./errors.js";
 import { env } from "../config/env.js";
 import { prisma } from "../lib/prisma.js";
 import { PLAN_HIERARCHY, planHasFeature } from "../utils/plans.js";
+
+function isPasswordResetAllowedPath(url) {
+  const path = String(url || "").split("?")[0];
+  return (
+    /\/auth\/me$/.test(path) ||
+    /\/auth\/change-password$/.test(path) ||
+    /\/auth\/logout$/.test(path)
+  );
+}
 
 export function authenticate(req, _res, next) {
   const headerAuth = req.headers.authorization || "";
@@ -21,11 +30,25 @@ export function authenticate(req, _res, next) {
       dealershipId: claims.dealershipId || null,
       plan: claims.plan || null,
       portal: claims.portal,
+      mustResetPassword: !!claims.mustResetPassword,
       impersonation: !!claims.impersonation,
       impersonatedBy: claims.impersonatedBy ? String(claims.impersonatedBy) : null,
       impersonationId: claims.impersonationId || null,
       purpose: claims.purpose || null,
     };
+
+    // Temp-password accounts may only hit me / change-password / logout until reset.
+    if (req.auth.mustResetPassword && !isPasswordResetAllowedPath(req.originalUrl)) {
+      return next(
+        new AppError(
+          "You must set a new password before continuing.",
+          403,
+          "PASSWORD_RESET_REQUIRED",
+          { mustResetPassword: true },
+        ),
+      );
+    }
+
     return next();
   } catch {
     return next(unauthorized("Invalid or expired token."));

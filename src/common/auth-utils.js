@@ -19,6 +19,22 @@ export async function verifyPassword(password, hash) {
   return bcrypt.compare(String(password), hash);
 }
 
+/** Matches client change-password rules (length + complexity). */
+export function isStrongPassword(password) {
+  const value = String(password || "");
+  return (
+    value.length >= 8 &&
+    value.length <= 128 &&
+    /[A-Z]/.test(value) &&
+    /[a-z]/.test(value) &&
+    /[0-9]/.test(value) &&
+    /[^A-Za-z0-9]/.test(value)
+  );
+}
+
+export const STRONG_PASSWORD_MESSAGE =
+  "Password must be 8–128 characters and include uppercase, lowercase, a number, and a special character.";
+
 export function portalForPlan(plan) {
   if (plan === "wholesaler") return "wholesale";
   if (plan === "independent_dealer") return "admin";
@@ -65,6 +81,7 @@ export function signAccessToken(user) {
       dealershipId: user.dealershipId || null,
       plan: user.dealership?.plan || null,
       portal,
+      mustResetPassword: !!user.mustResetPassword,
       type: "access",
     },
     env.JWT_ACCESS_SECRET,

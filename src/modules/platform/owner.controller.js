@@ -3,7 +3,7 @@ import * as ownerService from "./owner.service.js";
 
 const ownerLoginSchema = z.object({
   email: z.string().email().transform((v) => v.toLowerCase().trim()),
-  password: z.string().min(8).max(128),
+  password: z.string().min(1).max(128),
 });
 
 function clientIp(req) {

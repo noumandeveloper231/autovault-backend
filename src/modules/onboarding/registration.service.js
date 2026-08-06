@@ -72,7 +72,6 @@ export async function completeRegistration(token) {
     throw validationError("Token is no longer valid.");
   }
 
-  let temporaryPassword = null;
   const sessionId = payload.sessionId || registration.stripeCheckoutSessionId;
   if (registration.status !== "active" && stripe && sessionId) {
     try {
@@ -109,10 +108,7 @@ export async function completeRegistration(token) {
   });
   if (current?.status === "active") {
     try {
-      const welcome = await sendWelcomeIfNeeded(registration.id);
-      if (welcome?.temporaryPassword) {
-        temporaryPassword = welcome.temporaryPassword;
-      }
+      await sendWelcomeIfNeeded(registration.id);
     } catch (err) {
       logger.error(
         { err, registrationId: registration.id },
@@ -139,7 +135,6 @@ export async function completeRegistration(token) {
       loginPath: loginPathForPlan(fresh.plan),
       loginEmail: fresh.email || payload.email || null,
       email: fresh.email || payload.email || null,
-      temporaryPassword,
     },
   };
 }
