@@ -182,7 +182,7 @@ model Registration {
   plan                     PlanSlug?
   status                   RegistrationStatus @default(pending)
   paymentStatus            PaymentStatus      @default(pending)
-  monthlyFee               Decimal            @default(39.99) @db.Decimal(12, 2)
+  monthlyFee               Decimal            @default(99.99) @db.Decimal(12, 2)
   stripeCustomerId         String?
   stripeSubscriptionId     String?            @unique
   stripeCheckoutSessionId  String?
@@ -217,7 +217,7 @@ model Dealership {
   plan                 PlanSlug?
   status               DealershipStatus @default(pending)
   paymentStatus        PaymentStatus    @default(pending)
-  monthlyFee           Decimal          @default(39.99) @db.Decimal(12, 2)
+  monthlyFee           Decimal          @default(99.99) @db.Decimal(12, 2)
   stripeCustomerId     String?
   stripeSubscriptionId String?          @unique
   billingAutoExpense   Boolean          @default(false)

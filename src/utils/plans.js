@@ -19,11 +19,15 @@ export const PLAN_TO_PRICE_ENV = {
   growing_dealership: "STRIPE_GROWING_DEALERSHIP_PRICE_ID",
 };
 
+/** Recurring monthly fee after the free first month (Stripe trial). */
 export const PLAN_MONTHLY_FEE = {
-  wholesaler: 39.99,
-  independent_dealer: 39.99,
-  growing_dealership: 39.99,
+  wholesaler: 99.99,
+  independent_dealer: 99.99,
+  growing_dealership: 199.99,
 };
+
+/** Free first month on new subscriptions (onboarding checkout only). */
+export const SUBSCRIPTION_TRIAL_DAYS = 30;
 
 export const REGISTRATION_STATUSES = [
   "pending",

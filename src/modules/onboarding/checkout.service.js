@@ -3,7 +3,11 @@ import { stripe } from "../../lib/stripe.js";
 import { env } from "../../config/env.js";
 import { createCompletionToken, hashToken } from "../../utils/tokens.js";
 import { conflict, notFound } from "../../common/errors.js";
-import { PLAN_TO_PRICE_ENV, PLAN_MONTHLY_FEE } from "../../utils/plans.js";
+import {
+  PLAN_TO_PRICE_ENV,
+  PLAN_MONTHLY_FEE,
+  SUBSCRIPTION_TRIAL_DAYS,
+} from "../../utils/plans.js";
 
 const FRONTEND_BASE = env.FRONTEND_URL.replace(/\/+$/, "");
 
@@ -55,6 +59,7 @@ export async function createCheckout({ registrationId, plan }) {
     customer: customerId,
     line_items: [{ price: priceId, quantity: 1 }],
     subscription_data: {
+      trial_period_days: SUBSCRIPTION_TRIAL_DAYS,
       metadata: {
         registrationId: registration.id,
         plan,

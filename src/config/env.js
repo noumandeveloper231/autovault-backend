@@ -31,6 +31,8 @@ export const env = {
   BREVO_API_KEY: process.env.BREVO_API_KEY || "",
   BREVO_SENDER_EMAIL: process.env.BREVO_SENDER_EMAIL || "onboarding@noumandevs.online",
   BREVO_SENDER_NAME: process.env.BREVO_SENDER_NAME || "AutoVault",
+  CONTACT_TO_EMAIL:
+    process.env.CONTACT_TO_EMAIL || "privacy@autovault360.com",
   UPSTASH_REDIS_REST_URL: process.env.UPSTASH_REDIS_REST_URL || "",
   UPSTASH_REDIS_REST_TOKEN: process.env.UPSTASH_REDIS_REST_TOKEN || "",
 
