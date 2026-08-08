@@ -1,17 +1,17 @@
 # AutoVault Backend (v2)
 
-Express + Prisma + **Neon PostgreSQL** + **Upstash Redis** multi-tenant CRM API for the Static frontend on Vercel.
+Express + Prisma + **PostgreSQL** + **Redis** multi-tenant CRM API for the Static frontend.
 
 ## Stack
 
 | Layer | Choice |
 |-------|--------|
-| API | Express (ESM) on Render |
+| API | Express (ESM) |
 | ORM | Prisma 6 |
-| Database | Neon PostgreSQL |
-| Jobs / cache | Upstash Redis (REST) |
+| Database | PostgreSQL (Neon or self-hosted) |
+| Jobs / cache | Redis (`REDIS_URL`) or Upstash REST fallback |
 | Auth | JWT access + refresh, bcrypt |
-| Email | Resend |
+| Email | Brevo |
 | Payments | Stripe |
 | Files | Cloudflare R2 (presigned PUT/GET) |
 
@@ -19,8 +19,8 @@ MongoDB has been removed from the CRM domain.
 
 ## Quick start
 
-1. Create a Neon project and copy the connection string.
-2. Create an Upstash Redis database and copy REST URL + token.
+1. Create a PostgreSQL database and copy the connection string.
+2. Run Redis locally/on VPS (`REDIS_URL`) **or** create an Upstash Redis DB (REST URL + token).
 3. Copy env template and fill values:
 
 ```bash
@@ -29,14 +29,15 @@ cp .env.example .env
 
 Required:
 
-- `DATABASE_URL` ù Neon connection string (`?sslmode=require`)
+- `DATABASE_URL` ? Neon connection string (`?sslmode=require`)
 - `JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET` (or legacy `JWT_SECRET`)
 - `OWNER_API_KEY`
 - Stripe + Resend keys for onboarding emails
 
 Optional:
 
-- `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN`
+- `REDIS_URL` (preferred on VPS, e.g. `redis://127.0.0.1:6379`)
+- `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` (used only if `REDIS_URL` is empty)
 - Cloudflare R2 (required for file uploads):
   - `R2_ACCOUNT_ID`
   - `R2_ACCESS_KEY_ID` / `R2_SECRET_ACCESS_KEY`
@@ -117,7 +118,7 @@ npm run dev
 | 9 | Payroll | `/api/v1/sales-reps`, `/api/v1/payroll-runs` |
 | 10 | Tax | `/api/v1/tax` |
 | 11 | CPA | `/api/v1/cpa` |
-| 12ù15 | Calendar, messages, files, platform | `/api/v1/calendar`, `/messages`, `/files`, `/platform` |
+| 12?15 | Calendar, messages, files, platform | `/api/v1/calendar`, `/messages`, `/files`, `/platform` |
 
 Tax reminder cron (secure with owner key):
 
@@ -125,20 +126,51 @@ Tax reminder cron (secure with owner key):
 
 ## Multi-tenancy
 
-Every tenant row is scoped by `dealershipId`. JWT carries `dealershipId` + `role`. Services must never trust a client-supplied tenant id for nonùplatform-owner users.
+Every tenant row is scoped by `dealershipId`. JWT carries `dealershipId` + `role`. Services must never trust a client-supplied tenant id for non?platform-owner users.
 
 ## Frontend
 
 Static client (`../client`):
 
-- `api.js` ù API client with refresh rotation
-- `crm-bootstrap.js` ù loads live dashboard data when logged in
+- `api.js` ? API client with refresh rotation
+- `crm-bootstrap.js` ? loads live dashboard data when logged in
 - `/forgot-password`, `/reset-password`, `/invite`
+
+## Redis on a VPS (recommended)
+
+Install Redis on the same machine as the API, then point the app at it with `REDIS_URL`.
+
+```bash
+# Ubuntu/Debian
+sudo apt update
+sudo apt install -y redis-server
+
+# Bind to localhost only (default is usually fine)
+sudo sed -i 's/^supervised no/supervised systemd/' /etc/redis/redis.conf
+# Ensure: bind 127.0.0.1 ::1
+# Optional: requirepass YOUR_STRONG_PASSWORD
+
+sudo systemctl enable redis-server
+sudo systemctl restart redis-server
+redis-cli ping   # expect PONG
+```
+
+In `/var/www/autovault-backend/.env`:
+
+```env
+REDIS_URL=redis://127.0.0.1:6379
+# With password:
+# REDIS_URL=redis://:YOUR_STRONG_PASSWORD@127.0.0.1:6379
+```
+
+Leave `UPSTASH_*` empty (or unset) so local Redis is used. Restart the Node process after changing env.
+
+Used for: Jenna daily quota + email job enqueue lists.
 
 ## Deploy (Render)
 
 1. Connect the `Static/server` repo/folder.
-2. Set env vars (Neon URL, Upstash, JWT, Stripe, Resend).
+2. Set env vars (DB URL, `REDIS_URL` or Upstash, JWT, Stripe, Brevo).
 3. Build: `npm install && npx prisma generate`
 4. Start: `npx prisma migrate deploy && npm start`
 5. Point Vercel `AUTOVAULT_API_URL` (or default Render URL) at this service.
