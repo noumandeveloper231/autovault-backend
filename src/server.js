@@ -1,10 +1,8 @@
 import express from "express";
 import http from "http";
-import path from "path";
 import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
-import { fileURLToPath } from "url";
 import { env, assertRequiredEnv } from "./config/env.js";
 import { connectDb } from "./lib/prisma.js";
 import { errorHandler } from "./common/error-handler.js";
@@ -201,18 +199,21 @@ export async function startServer() {
   initSocket(httpServer);
   const port = env.PORT || 3000;
   httpServer.listen(port, "0.0.0.0", () => {
+    // console so PM2 out logs always show something even if pino is quiet
+    console.log(`[server] running on port ${port}`);
     logger.info(`[server] running on port ${port}`);
   });
 }
 
-// Resolve both sides — PM2 often passes a relative argv[1] ("src/server.js"),
-// while import.meta.url is absolute; a strict === check skips startServer()
-// and Node exits 0, which PM2 then restart-loops.
-const isDirectRun =
-  Boolean(process.argv[1]) &&
-  path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url));
+// Always listen unless explicitly skipped (tests). Do NOT gate on argv vs import.meta.url —
+// PM2/nodemon path forms differ and skipping listen makes Node exit 0 → restart loop.
+const skipListen =
+  process.env.SKIP_SERVER_LISTEN === "1" ||
+  process.env.VITEST === "true" ||
+  process.env.NODE_ENV === "test";
 
-if (isDirectRun) {
+if (!skipListen) {
+  console.log("[server] starting...");
   startServer().catch((error) => {
     console.error("[server] failed to start:", error);
     process.exit(1);
