@@ -1,13 +1,29 @@
--- Add subcategory for the three top-level expense categories
+-- Align dealership_expenses with current schema (columns added in app but never migrated),
+-- then remap legacy categories → Vehicle / Recurring / Dealership + subcategory.
+
 ALTER TABLE "dealership_expenses" ADD COLUMN IF NOT EXISTS "subcategory" VARCHAR(80);
+ALTER TABLE "dealership_expenses" ADD COLUMN IF NOT EXISTS "name" VARCHAR(255);
+ALTER TABLE "dealership_expenses" ADD COLUMN IF NOT EXISTS "status" VARCHAR(20) NOT NULL DEFAULT 'unpaid';
+ALTER TABLE "dealership_expenses" ADD COLUMN IF NOT EXISTS "recurringFrequency" VARCHAR(20);
+ALTER TABLE "dealership_expenses" ADD COLUMN IF NOT EXISTS "vehicleVin" VARCHAR(50);
+
+-- Backfill required name for any pre-existing rows
+UPDATE "dealership_expenses"
+SET "name" = COALESCE(NULLIF(TRIM("name"), ''), NULLIF(TRIM("vendor"), ''), NULLIF(TRIM("description"), ''), 'Expense')
+WHERE "name" IS NULL OR TRIM("name") = '';
+
+ALTER TABLE "dealership_expenses"
+  ALTER COLUMN "name" SET NOT NULL;
 
 -- category was ExpenseCategory enum in init; schema now uses VARCHAR(50).
--- Convert off the enum BEFORE writing the new string labels (spaces are invalid enum values).
 ALTER TABLE "dealership_expenses"
   ALTER COLUMN "category" TYPE VARCHAR(50)
   USING ("category"::text);
 
 DROP TYPE IF EXISTS "ExpenseCategory";
+
+CREATE INDEX IF NOT EXISTS "dealership_expenses_dealershipId_vehicleVin_idx"
+  ON "dealership_expenses"("dealershipId", "vehicleVin");
 
 -- Migrate legacy categories → Vehicle / Recurring / Dealership + subcategory
 -- Covers: init enum labels (snake_case) and later 14 display labels.
