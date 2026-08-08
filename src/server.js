@@ -1,5 +1,6 @@
 import express from "express";
 import http from "http";
+import path from "path";
 import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
@@ -204,8 +205,12 @@ export async function startServer() {
   });
 }
 
+// Resolve both sides — PM2 often passes a relative argv[1] ("src/server.js"),
+// while import.meta.url is absolute; a strict === check skips startServer()
+// and Node exits 0, which PM2 then restart-loops.
 const isDirectRun =
-  process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
+  Boolean(process.argv[1]) &&
+  path.resolve(process.argv[1]) === path.resolve(fileURLToPath(import.meta.url));
 
 if (isDirectRun) {
   startServer().catch((error) => {
