@@ -4,6 +4,10 @@ import { writeAuditLog } from "../../common/audit.js";
 import { toNum, roundMoney } from "../../common/serialize.js";
 import { pageMeta } from "../../common/validate.js";
 import {
+  resolveSalesRepCommission,
+  computeCommissionAmount,
+} from "../../common/commission.js";
+import {
   nextJacketNumber,
   createJacketActivity,
   serializeDealJacket,
@@ -151,15 +155,6 @@ async function resolveCustomer(dealershipId, payload, createdById, tx) {
   return created.id;
 }
 
-async function resolveCommissionRate(salesRepId) {
-  if (!salesRepId) return 0;
-  const profile = await prisma.salesRepProfile.findFirst({
-    where: { userId: salesRepId },
-  });
-  const rate = toNum(profile?.commissionRate);
-  return rate != null && rate >= 0 ? rate : 0.1;
-}
-
 export async function markSold(vehicleId, payload, ctx) {
   const { dealershipId, userId, role } = ctx;
   if (!["owner", "manager", "platform_owner"].includes(role)) {
@@ -170,13 +165,28 @@ export async function markSold(vehicleId, payload, ctx) {
   const soldPrice = roundMoney(payload.soldPrice);
   const totalInvested = toNum(vehicle.totalInvested) ?? 0;
   const grossProfit = roundMoney(soldPrice - totalInvested);
+  const resolved = payload.salesRepId
+    ? await resolveSalesRepCommission(payload.salesRepId)
+    : { type: "percentage", rate: 0, amount: null };
+  const commissionType =
+    payload.commissionType ||
+    (payload.commissionAmount != null && payload.commissionRate == null
+      ? "manual"
+      : resolved.type === "flat"
+        ? "flat"
+        : "percentage");
   const commissionRate =
     payload.commissionRate ??
-    (payload.salesRepId ? await resolveCommissionRate(payload.salesRepId) : 0);
-  const commissionAmount =
-    payload.commissionAmount != null
-      ? roundMoney(payload.commissionAmount)
-      : roundMoney(Math.max(0, grossProfit) * commissionRate);
+    (commissionType === "flat" ? null : resolved.rate ?? 0);
+  const commissionAmount = computeCommissionAmount(grossProfit, {
+    commissionAmount: payload.commissionAmount,
+    commissionRate:
+      commissionType === "flat"
+        ? (payload.commissionRate ?? resolved.amount)
+        : commissionRate,
+    commissionType,
+    resolved,
+  });
 
   const salesTax = roundMoney(payload.salesTaxAmount ?? 0);
   const licenseFees = roundMoney(payload.licenseFees ?? 0);
@@ -240,8 +250,13 @@ export async function markSold(vehicleId, payload, ctx) {
         licenseFees,
         soldPriceBeforeTax: soldPrice,
         commissionAmount,
-        commissionRate: commissionRate > 0 ? commissionRate : null,
-        commissionType: payload.commissionType ?? "percentage",
+        commissionRate:
+          commissionType === "flat" || commissionType === "manual"
+            ? null
+            : commissionRate != null && commissionRate > 0
+              ? commissionRate
+              : null,
+        commissionType,
         netProfit: profitNet,
         salesRepId: payload.salesRepId ?? null,
         rosNumber: payload.rosNumber ?? null,
@@ -260,9 +275,13 @@ export async function markSold(vehicleId, payload, ctx) {
         licenseFees,
         soldPriceBeforeTax: soldPrice,
         commissionAmount,
-        commissionRate: commissionRate > 0 ? commissionRate : null,
-        commissionType: payload.commissionType ?? deal.commissionType ?? "percentage",
-        netProfit: profitNet,
+        commissionRate:
+          commissionType === "flat" || commissionType === "manual"
+            ? null
+            : commissionRate != null && commissionRate > 0
+              ? commissionRate
+              : null,
+        commissionType: commissionType ?? deal.commissionType ?? "percentage",        netProfit: profitNet,
         salesRepId: payload.salesRepId ?? deal.salesRepId,
         rosNumber: payload.rosNumber ?? deal.rosNumber,
         notes: payload.notes ?? deal.notes,
@@ -353,7 +372,11 @@ export async function markSold(vehicleId, payload, ctx) {
       where: { dealJacketId: jacket.id },
     });
     if (!existingComm) {
-      const commRate = await resolveCommissionRate(jacket.salesRepId);
+      const resolved = await resolveSalesRepCommission(jacket.salesRepId);
+      const ledgerRate =
+        resolved.type === "flat"
+          ? resolved.amount ?? 0
+          : resolved.rate ?? 0;
       await prisma.salesRepCommission.create({
         data: {
           dealershipId,
@@ -362,7 +385,7 @@ export async function markSold(vehicleId, payload, ctx) {
           commissionAmount: toNum(jacket.commissionAmount) ?? 0,
           grossProfit: toNum(jacket.profitGross) ?? 0,
           soldPrice: toNum(jacket.soldPrice) ?? 0,
-          commissionRate: commRate,
+          commissionRate: ledgerRate,
           status: "approved",
         },
       });
@@ -447,15 +470,28 @@ export async function importPreviousSold(payload, ctx) {
   const salesRepId = allowCommission ? payload.salesRepId ?? null : null;
   let commissionAmount = 0;
   let commissionRate = 0;
+  let commissionType = "manual";
   if (allowCommission && salesRepId) {
+    const resolved = await resolveSalesRepCommission(salesRepId);
+    commissionType =
+      payload.commissionType ||
+      (payload.commissionAmount != null && payload.commissionRate == null
+        ? "manual"
+        : resolved.type === "flat"
+          ? "flat"
+          : "percentage");
     commissionRate =
-      payload.commissionRate ?? (await resolveCommissionRate(salesRepId));
-    commissionAmount =
-      payload.commissionAmount != null
-        ? roundMoney(payload.commissionAmount)
-        : roundMoney(Math.max(0, soldPrice - totalInvested) * commissionRate);
+      payload.commissionRate ??
+      (resolved.type === "flat" ? resolved.amount ?? 0 : resolved.rate ?? 0);
+    commissionAmount = computeCommissionAmount(soldPrice - totalInvested, {
+      commissionAmount: payload.commissionAmount,
+      commissionRate,
+      commissionType,
+      resolved,
+    });
   } else if (allowCommission && payload.commissionAmount != null) {
     commissionAmount = roundMoney(payload.commissionAmount);
+    commissionType = payload.commissionType || "manual";
   }
 
   const year = payload.year || new Date(payload.acquisitionDate).getFullYear();
@@ -532,8 +568,13 @@ export async function importPreviousSold(payload, ctx) {
       licenseFees,
       soldPriceBeforeTax: soldPrice,
       commissionAmount,
-      commissionRate: commissionRate > 0 ? commissionRate : null,
-      commissionType: "manual",
+      commissionRate:
+        commissionType === "flat" || commissionType === "manual"
+          ? null
+          : commissionRate > 0
+            ? commissionRate
+            : null,
+      commissionType,
       netProfit: profitNet,
       salesRepId,
       notes: "Historical import",

@@ -32,6 +32,7 @@ function serializeSalesRep(user, profile) {
           payDay: profile.payDay,
           paymentMethod: profile.paymentMethod,
           payDocUrl: profile.payDocUrl,
+          commissionType: profile.commissionType || "percentage",
           commissionRate: toNum(profile.commissionRate),
         }
       : null,
@@ -172,7 +173,10 @@ export async function createSalesRep(dealershipId, payload, ctx) {
         payDay: payload.payDay ?? null,
         paymentMethod: payload.paymentMethod ?? null,
         payDocUrl: payload.payDocUrl ?? null,
-        commissionRate: payload.commissionRate ?? 0.1,
+        commissionType: payload.commissionType ?? "percentage",
+        commissionRate:
+          payload.commissionRate ??
+          (payload.commissionType === "flat" ? 0 : 0.1),
       },
     });
 
@@ -391,6 +395,9 @@ export async function updateSalesRep(id, dealershipId, payload, ctx) {
           ...(payload.payDay !== undefined && { payDay: payload.payDay }),
           ...(payload.paymentMethod !== undefined && { paymentMethod: payload.paymentMethod }),
           ...(payload.payDocUrl !== undefined && { payDocUrl: payload.payDocUrl }),
+          ...(payload.commissionType != null && {
+            commissionType: payload.commissionType,
+          }),
           ...(payload.commissionRate != null && {
             commissionRate: payload.commissionRate,
           }),

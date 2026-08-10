@@ -1,20 +1,51 @@
 import { z } from "zod";
 
-export const createSalesRepSchema = z.object({
-  username: z.string().min(2).optional(),
-  email: z.string().email(),
-  fullName: z.string().min(1),
-  phone: z.string().optional(),
-  password: z.string().min(8).optional(),
-  sendInvite: z.boolean().optional(),
-  birthDate: z.coerce.date().optional(),
-  baseSalary: z.coerce.number().min(0).default(0),
-  payFrequency: z.enum(["weekly", "biweekly"]).optional(),
-  payDay: z.coerce.number().int().min(0).max(6).optional(),
-  paymentMethod: z.enum(["Direct Deposit", "Check", "Cash"]).optional(),
-  payDocUrl: z.string().optional(),
-  commissionRate: z.coerce.number().min(0).max(1).default(0.1),
-});
+const commissionFields = {
+  commissionType: z.enum(["percentage", "flat"]).default("percentage"),
+  commissionRate: z.coerce.number().min(0).optional(),
+};
+
+function refineCommission(data, ctx) {
+  const rate = data.commissionRate;
+  if (
+    data.commissionType === "percentage" &&
+    rate != null &&
+    rate > 1
+  ) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Percentage commissionRate must be between 0 and 1 (e.g. 0.2 = 20%)",
+      path: ["commissionRate"],
+    });
+  }
+}
+
+export const createSalesRepSchema = z
+  .object({
+    username: z.string().min(2).optional(),
+    email: z.string().email(),
+    fullName: z.string().min(1),
+    phone: z.string().optional(),
+    password: z.string().min(8).optional(),
+    sendInvite: z.boolean().optional(),
+    birthDate: z.coerce.date().optional(),
+    baseSalary: z.coerce.number().min(0).default(0),
+    payFrequency: z.enum(["weekly", "biweekly"]).optional(),
+    payDay: z.coerce.number().int().min(0).max(6).optional(),
+    paymentMethod: z.enum(["Direct Deposit", "Check", "Cash"]).optional(),
+    payDocUrl: z.string().optional(),
+    ...commissionFields,
+  })
+  .superRefine(refineCommission)
+  .transform((d) => ({
+    ...d,
+    commissionRate:
+      d.commissionRate != null
+        ? d.commissionRate
+        : d.commissionType === "flat"
+          ? 0
+          : 0.1,
+  }));
 
 export const updateSalesRepSchema = z
   .object({
@@ -28,9 +59,23 @@ export const updateSalesRepSchema = z
     payDay: z.coerce.number().int().min(0).max(6).nullable().optional(),
     paymentMethod: z.enum(["Direct Deposit", "Check", "Cash"]).nullable().optional(),
     payDocUrl: z.string().nullable().optional(),
-    commissionRate: z.coerce.number().min(0).max(1).optional(),
+    commissionType: z.enum(["percentage", "flat"]).optional(),
+    commissionRate: z.coerce.number().min(0).optional(),
   })
-  .refine((d) => Object.keys(d).length > 0, { message: "No fields to update" });
+  .refine((d) => Object.keys(d).length > 0, { message: "No fields to update" })
+  .superRefine((data, ctx) => {
+    if (
+      data.commissionType === "percentage" &&
+      data.commissionRate != null &&
+      data.commissionRate > 1
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Percentage commissionRate must be between 0 and 1 (e.g. 0.2 = 20%)",
+        path: ["commissionRate"],
+      });
+    }
+  });
 
 export const createStaffSchema = z.object({
   fullName: z.string().min(1, "Full name is required"),

@@ -3,6 +3,10 @@ import { notFound, conflict, forbidden } from "../../common/errors.js";
 import { writeAuditLog } from "../../common/audit.js";
 import { toNum, roundMoney } from "../../common/serialize.js";
 import { pageMeta } from "../../common/validate.js";
+import {
+  resolveSalesRepCommission,
+  computeCommissionAmount,
+} from "../../common/commission.js";
 import { compressDataUrl } from "../../utils/image-compress.js";
 import { env } from "../../config/env.js";
 import { deleteR2Object, isR2Configured } from "../../lib/r2.js";
@@ -174,24 +178,19 @@ function assertManagerAction(ctx) {
   }
 }
 
-async function resolveCommissionRate(salesRepId) {
-  if (!salesRepId) return 0;
-  const profile = await prisma.salesRepProfile.findFirst({
-    where: { userId: salesRepId },
-  });
-  const rate = toNum(profile?.commissionRate);
-  return rate != null && rate >= 0 ? rate : 0.1;
-}
-
 function computeFinancials(vehicle, payload) {
   const vehicleInvested = toNum(vehicle.totalInvested) ?? 0;
   const soldPrice = roundMoney(payload.soldPrice);
   const profitGross = roundMoney(soldPrice - vehicleInvested);
-  const commissionRate = payload.commissionRate ?? 0.1;
-  const commissionAmount =
-    payload.commissionAmount != null
-      ? roundMoney(payload.commissionAmount)
-      : roundMoney(Math.max(0, profitGross) * commissionRate);
+  const commissionType = payload.commissionType || "percentage";
+  const commissionRate =
+    payload.commissionRate ?? (commissionType === "flat" ? 0 : 0.1);
+  const commissionAmount = computeCommissionAmount(profitGross, {
+    commissionAmount: payload.commissionAmount,
+    commissionRate,
+    commissionType,
+    resolved: payload._resolvedCommission,
+  });
   const additionalExpenses = roundMoney(payload.additionalExpenses ?? 0);
   const netCheckRaw =
     payload.netCheck ??
@@ -413,11 +412,20 @@ export async function createJacket(dealershipId, payload, ctx) {
 
   const salesRepId =
     ctx.role === "sales_rep" ? ctx.userId : (payload.salesRepId ?? null);
+  const resolved = await resolveSalesRepCommission(salesRepId);
+  const commissionType =
+    payload.commissionType ||
+    (payload.commissionAmount != null && payload.commissionRate == null
+      ? "manual"
+      : resolved.type);
   const commissionRate =
-    payload.commissionRate ?? (await resolveCommissionRate(salesRepId));
+    payload.commissionRate ??
+    (resolved.type === "flat" ? resolved.amount : resolved.rate);
   const financials = computeFinancials(vehicle, {
     ...payload,
     commissionRate,
+    commissionType,
+    _resolvedCommission: resolved,
   });
 
   const jacket = await prisma.$transaction(async (tx) => {
@@ -493,6 +501,16 @@ export async function updateJacket(id, dealershipId, payload, ctx) {
   });
   if (!vehicle) throw notFound("Vehicle not found.");
 
+  const salesRepIdForRate =
+    payload.salesRepId !== undefined ? payload.salesRepId : jacket.salesRepId;
+  const resolved = salesRepIdForRate
+    ? await resolveSalesRepCommission(salesRepIdForRate)
+    : { type: "percentage", rate: 0, amount: null };
+  const commissionType =
+    payload.commissionType ||
+    (payload.commissionAmount != null && payload.commissionRate == null
+      ? "manual"
+      : resolved.type);
   const merged = {
     soldPrice: payload.soldPrice ?? toNum(jacket.soldPrice),
     totalTax: payload.totalTax ?? toNum(jacket.totalTax),
@@ -502,11 +520,11 @@ export async function updateJacket(id, dealershipId, payload, ctx) {
       payload.additionalExpenses ?? toNum(jacket.additionalExpenses),
     commissionRate:
       payload.commissionRate ??
-      (jacket.salesRepId
-        ? await resolveCommissionRate(jacket.salesRepId)
-        : 0),
+      (resolved.type === "flat" ? resolved.amount : resolved.rate ?? 0),
     commissionAmount:
       payload.commissionAmount ?? toNum(jacket.commissionAmount),
+    commissionType,
+    _resolvedCommission: resolved,
     fees:
       payload.fees != null
         ? payload.fees
@@ -670,7 +688,9 @@ export async function resubmitJacket(id, dealershipId, ctx) {
 
 async function createCommissionOnApprove(jacket, tx) {
   if (!jacket.salesRepId) return null;
-  const rate = await resolveCommissionRate(jacket.salesRepId);
+  const resolved = await resolveSalesRepCommission(jacket.salesRepId);
+  const rate =
+    resolved.type === "flat" ? resolved.amount ?? 0 : resolved.rate ?? 0;
   if (rate <= 0 && toNum(jacket.commissionAmount) <= 0) return null;
 
   const existing = await tx.salesRepCommission.findFirst({

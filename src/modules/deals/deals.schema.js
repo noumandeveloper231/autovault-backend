@@ -22,8 +22,8 @@ export const markSoldSchema = z
     salesTaxAmount: z.coerce.number().min(0).default(0),
     licenseFees: z.coerce.number().min(0).default(0),
     salesRepId: z.string().uuid().nullable().optional(),
-    commissionType: z.enum(["percentage", "manual"]).optional(),
-    commissionRate: z.coerce.number().min(0).max(1).optional(),
+    commissionType: z.enum(["percentage", "manual", "flat"]).optional(),
+    commissionRate: z.coerce.number().min(0).optional(),
     commissionAmount: z.coerce.number().min(0).optional(),
     rosNumber: z.string().optional(),
     notes: z.string().optional(),
@@ -76,7 +76,8 @@ export const previousSoldSchema = z
       .transform((v) => (v === "" || v == null ? undefined : v)),
     salesRepId: z.string().uuid().nullable().optional(),
     commissionAmount: z.coerce.number().min(0).optional(),
-    commissionRate: z.coerce.number().min(0).max(1).optional(),
+    commissionRate: z.coerce.number().min(0).optional(),
+    commissionType: z.enum(["percentage", "manual", "flat"]).optional(),
     notes: z.string().optional(),
   })
   .refine((d) => d.saleDate >= d.acquisitionDate, {

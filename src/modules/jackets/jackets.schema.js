@@ -19,8 +19,9 @@ export const createJacketSchema = z.object({
   notes: z.string().optional(),
   dealType: z.enum(["Retail", "Wholesale", "Fleet"]).default("Retail"),
   dateSold: z.coerce.date().optional(),
-  commissionRate: z.coerce.number().min(0).max(1).optional(),
+  commissionRate: z.coerce.number().min(0).optional(),
   commissionAmount: z.coerce.number().min(0).optional(),
+  commissionType: z.enum(["percentage", "manual", "flat"]).optional(),
 });
 
 export const updateJacketSchema = createJacketSchema
