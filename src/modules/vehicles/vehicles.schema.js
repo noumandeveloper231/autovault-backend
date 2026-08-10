@@ -18,6 +18,8 @@ export const listVehiclesQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(25),
   q: z.string().optional(),
   status: vehicleStatus.optional(),
+  /** `inventory` = unsold / current stock only; `all` = every vehicle (default). */
+  scope: z.enum(["all", "inventory"]).optional().default("all"),
 });
 
 export const createVehicleSchema = z.object({

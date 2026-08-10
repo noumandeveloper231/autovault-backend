@@ -2,6 +2,7 @@ import { prisma } from "../../lib/prisma.js";
 import { toNum, roundMoney, serializeRecord } from "../../common/serialize.js";
 import { pageMeta } from "../../common/validate.js";
 import { profitLoss } from "../reports/reports.service.js";
+import { currentInventoryWhere } from "../vehicles/vehicle-status.js";
 
 const PENDING_JACKET_STATUSES = [
   "pending_review",
@@ -50,11 +51,7 @@ export async function summary(dealershipId, role, userId) {
     profitReport,
   ] = await Promise.all([
     prisma.vehicle.count({
-      where: {
-        dealershipId,
-        deletedAt: null,
-        status: { in: ["in_stock", "needs_attention"] },
-      },
+      where: currentInventoryWhere(dealershipId),
     }),
     role === "sales_rep"
       ? prisma.dealJacket.count({

@@ -2,12 +2,22 @@ import { prisma } from "../../lib/prisma.js";
 import { notFound, conflict } from "../../common/errors.js";
 import { writeAuditLog } from "../../common/audit.js";
 import { pageMeta } from "../../common/validate.js";
-import { serializeDecimals } from "../../common/serialize.js";
+import { serializeDecimals, roundMoney, toNum } from "../../common/serialize.js";
 import { recalculateTotalInvested } from "./vehicle-expenses.service.js";
+import {
+  ACTIVE_INVENTORY_STATUSES,
+  EXIT_INVENTORY_STATUSES,
+  allVehiclesWhere,
+  currentInventoryWhere,
+} from "./vehicle-status.js";
 
 function toDecimal(value) {
   if (value == null) return 0;
   return Number(value);
+}
+
+function moneySum(agg, field) {
+  return roundMoney(toNum(agg?._sum?.[field]) ?? 0);
 }
 
 export function serializeVehicle(vehicle) {
@@ -33,8 +43,13 @@ async function findVehicleRecord(dealershipId, vehicleId) {
 }
 
 export async function listVehicles(dealershipId, query) {
-  const { page, limit, q, status } = query;
-  const where = { dealershipId, deletedAt: null };
+  const { page, limit, q, status, scope } = query;
+  const where =
+    scope === "inventory"
+      ? { ...currentInventoryWhere(dealershipId) }
+      : { dealershipId, deletedAt: null };
+
+  // Explicit status wins over scope when both are provided.
   if (status) where.status = status;
   if (q) {
     where.OR = [
@@ -66,7 +81,81 @@ export async function listVehicles(dealershipId, query) {
 
   return {
     vehicles: rows.map(serializeVehicle),
-    meta: pageMeta(total, page, limit),
+    meta: {
+      ...pageMeta(total, page, limit),
+      scope: scope || "all",
+    },
+  };
+}
+
+/**
+ * Authoritative inventory vs total counts (+ cost rollups) for the Vehicles page.
+ * Current inventory = unsold / not exited. Total = every non-deleted vehicle.
+ */
+export async function getInventoryStats(dealershipId) {
+  const inventoryWhere = currentInventoryWhere(dealershipId);
+  const allWhere = allVehiclesWhere(dealershipId);
+  const soldWhere = {
+    dealershipId,
+    deletedAt: null,
+    OR: [
+      { status: { in: EXIT_INVENTORY_STATUSES } },
+      { soldAt: { not: null } },
+    ],
+  };
+
+  const costSelect = {
+    _sum: {
+      acquisitionCost: true,
+      auctionFees: true,
+      reconditioningCost: true,
+      registrationFees: true,
+      flooringFees: true,
+      totalInvested: true,
+    },
+  };
+
+  const [
+    currentInventoryCount,
+    totalCount,
+    soldCount,
+    titlesPresentCount,
+    inventoryCosts,
+    allCosts,
+  ] = await Promise.all([
+    prisma.vehicle.count({ where: inventoryWhere }),
+    prisma.vehicle.count({ where: allWhere }),
+    prisma.vehicle.count({ where: soldWhere }),
+    prisma.vehicle.count({
+      where: { ...inventoryWhere, titlePresent: true },
+    }),
+    prisma.vehicle.aggregate({ where: inventoryWhere, ...costSelect }),
+    prisma.vehicle.aggregate({ where: allWhere, ...costSelect }),
+  ]);
+
+  const mapCosts = (agg) => ({
+    purchaseCost: moneySum(agg, "acquisitionCost"),
+    fees: moneySum(agg, "auctionFees"),
+    repairs: moneySum(agg, "reconditioningCost"),
+    registrationFees: moneySum(agg, "registrationFees"),
+    flooringFees: moneySum(agg, "flooringFees"),
+    totalInvested: moneySum(agg, "totalInvested"),
+  });
+
+  return {
+    currentInventoryCount,
+    totalCount,
+    soldCount,
+    titlesPresentCount,
+    currentInventoryValue: mapCosts(inventoryCosts).totalInvested,
+    costs: {
+      currentInventory: mapCosts(inventoryCosts),
+      allVehicles: mapCosts(allCosts),
+    },
+    statuses: {
+      active: ACTIVE_INVENTORY_STATUSES,
+      exited: EXIT_INVENTORY_STATUSES,
+    },
   };
 }
 

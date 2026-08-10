@@ -51,6 +51,8 @@ vehiclesRouter.get(
   validateQuery(listVehiclesQuerySchema),
   asyncHandler(ctrl.listVehicles),
 );
+// Must be registered before /:id so "stats" is not parsed as a UUID.
+vehiclesRouter.get("/stats", asyncHandler(ctrl.getInventoryStats));
 vehiclesRouter.get(
   "/:id",
   validateParams(uuidParam),

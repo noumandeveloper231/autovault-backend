@@ -21,7 +21,8 @@
     "db:delete-user": "node prisma/delete-user.js",
     "r2:cors": "node scripts/configure-r2-cors.mjs",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "test:logins": "vitest run tests/integration/logins.test.js"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.758.0",

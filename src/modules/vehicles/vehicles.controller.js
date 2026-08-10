@@ -20,6 +20,11 @@ export async function listVehicles(req, res) {
   return res.json(result);
 }
 
+export async function getInventoryStats(req, res) {
+  const stats = await vehiclesService.getInventoryStats(dealershipId(req));
+  return res.json({ stats });
+}
+
 export async function getVehicle(req, res) {
   const vehicle = await vehiclesService.getVehicle(
     dealershipId(req),
