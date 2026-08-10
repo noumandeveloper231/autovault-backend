@@ -201,9 +201,21 @@ function computeFinancials(vehicle, payload) {
     netCheckRaw !== null &&
     netCheckRaw !== undefined &&
     netCheckRaw !== "";
-  // Option 1: Net Check − (invested + commission). Commission stays on contract gross.
+  const salesTax = roundMoney(
+    payload.totalTax ??
+      payload.salesTaxAmount ??
+      0,
+  );
+  const licenseFees = roundMoney(payload.licenseFees ?? 0);
+  // Net Check − Sales Tax − Reg Fees = amount applied to profit
   const profitNet = hasNetCheck
-    ? roundMoney(Number(netCheckRaw) - vehicleInvested - commissionAmount)
+    ? roundMoney(
+        Number(netCheckRaw) -
+          salesTax -
+          licenseFees -
+          vehicleInvested -
+          commissionAmount,
+      )
     : roundMoney(profitGross - commissionAmount - additionalExpenses);
   const totalSalePrice =
     payload.totalSalePrice ??
@@ -501,6 +513,17 @@ export async function updateJacket(id, dealershipId, payload, ctx) {
   });
   if (!vehicle) throw notFound("Vehicle not found.");
 
+  let dealLicenseFees = 0;
+  if (jacket.dealId) {
+    try {
+      const dealRow = await prisma.deal.findFirst({
+        where: { id: jacket.dealId, deletedAt: null },
+        select: { licenseFees: true },
+      });
+      dealLicenseFees = toNum(dealRow?.licenseFees) ?? 0;
+    } catch (_) {}
+  }
+
   const salesRepIdForRate =
     payload.salesRepId !== undefined ? payload.salesRepId : jacket.salesRepId;
   const resolved = salesRepIdForRate
@@ -514,6 +537,10 @@ export async function updateJacket(id, dealershipId, payload, ctx) {
   const merged = {
     soldPrice: payload.soldPrice ?? toNum(jacket.soldPrice),
     totalTax: payload.totalTax ?? toNum(jacket.totalTax),
+    licenseFees:
+      payload.licenseFees != null
+        ? payload.licenseFees
+        : dealLicenseFees,
     totalSalePrice: payload.totalSalePrice ?? toNum(jacket.totalSalePrice),
     downPayment: payload.downPayment ?? toNum(jacket.downPayment),
     additionalExpenses:

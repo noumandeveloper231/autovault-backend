@@ -202,7 +202,9 @@ export async function markSold(vehicleId, payload, ctx) {
     netCheckRaw !== undefined &&
     netCheckRaw !== "";
   const profitNet = hasNetCheck
-    ? roundMoney(Number(netCheckRaw) - totalInvested - commissionAmount)
+    ? roundMoney(
+        Number(netCheckRaw) - salesTax - licenseFees - totalInvested - commissionAmount,
+      )
     : roundMoney(grossProfit - commissionAmount - additionalExpenses);
   const saleDate = payload.saleDate || vehicle.soldAt || new Date();
 
