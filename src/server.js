@@ -45,6 +45,7 @@ import taxRoutes from "./modules/tax/tax.routes.js";
 import dashboardRoutes, {
   auditLogsRouter,
 } from "./modules/dashboard/dashboard.routes.js";
+import searchRoutes from "./modules/search/search.routes.js";
 import notificationsRoutes from "./modules/notifications/notifications.routes.js";
 import cpaRoutes from "./modules/cpa/cpa.routes.js";
 import wholesaleRoutes from "./modules/wholesale/wholesale.routes.js";
@@ -170,6 +171,7 @@ app.use("/api/v1/flooring", flooringRouter);
 app.use("/api/v1/customers", customersRouter);
 app.use("/api/v1/leads", leadsRouter);
 app.use("/api/v1/dashboard", dashboardRoutes);
+app.use("/api/v1/search", searchRoutes);
 app.use("/api/v1/audit-logs", auditLogsRouter);
 app.use("/api/v1/notifications", notificationsRoutes);
 app.use("/api/v1/cpa", cpaRoutes);

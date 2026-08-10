@@ -182,9 +182,18 @@ export async function markSold(vehicleId, payload, ctx) {
   const licenseFees = roundMoney(payload.licenseFees ?? 0);
   const additionalExpenses = roundMoney(payload.additionalExpenses ?? 0);
   const totalPriceOtd = roundMoney(soldPrice + salesTax + licenseFees);
-  const profitNet = roundMoney(
-    grossProfit - commissionAmount - additionalExpenses,
-  );
+  const netCheckRaw =
+    payload.netCheck ??
+    (payload.fees && payload.fees.netCheck != null
+      ? payload.fees.netCheck
+      : null);
+  const hasNetCheck =
+    netCheckRaw !== null &&
+    netCheckRaw !== undefined &&
+    netCheckRaw !== "";
+  const profitNet = hasNetCheck
+    ? roundMoney(Number(netCheckRaw) - totalInvested - commissionAmount)
+    : roundMoney(grossProfit - commissionAmount - additionalExpenses);
   const saleDate = payload.saleDate || vehicle.soldAt || new Date();
 
   // Sequential writes (not interactive $transaction) — Neon pooled

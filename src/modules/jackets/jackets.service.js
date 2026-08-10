@@ -193,9 +193,19 @@ function computeFinancials(vehicle, payload) {
       ? roundMoney(payload.commissionAmount)
       : roundMoney(Math.max(0, profitGross) * commissionRate);
   const additionalExpenses = roundMoney(payload.additionalExpenses ?? 0);
-  const profitNet = roundMoney(
-    profitGross - commissionAmount - additionalExpenses,
-  );
+  const netCheckRaw =
+    payload.netCheck ??
+    (payload.fees && payload.fees.netCheck != null
+      ? payload.fees.netCheck
+      : null);
+  const hasNetCheck =
+    netCheckRaw !== null &&
+    netCheckRaw !== undefined &&
+    netCheckRaw !== "";
+  // Option 1: Net Check − (invested + commission). Commission stays on contract gross.
+  const profitNet = hasNetCheck
+    ? roundMoney(Number(netCheckRaw) - vehicleInvested - commissionAmount)
+    : roundMoney(profitGross - commissionAmount - additionalExpenses);
   const totalSalePrice =
     payload.totalSalePrice ??
     soldPrice + (payload.totalTax ?? 0);
@@ -497,6 +507,12 @@ export async function updateJacket(id, dealershipId, payload, ctx) {
         : 0),
     commissionAmount:
       payload.commissionAmount ?? toNum(jacket.commissionAmount),
+    fees:
+      payload.fees != null
+        ? payload.fees
+        : jacket.fees && typeof jacket.fees === "object"
+          ? jacket.fees
+          : {},
   };
 
   const financials = computeFinancials(vehicle, merged);
@@ -546,6 +562,15 @@ export async function updateJacket(id, dealershipId, payload, ctx) {
     data,
     include: jacketInclude(),
   });
+
+  if (jacket.dealId && financials.profitNet != null) {
+    try {
+      await prisma.deal.update({
+        where: { id: jacket.dealId },
+        data: { netProfit: financials.profitNet },
+      });
+    } catch (_) {}
+  }
 
   await logTransition(jacket, "updated", ctx, {
     oldStatus: jacket.workflowStatus,
