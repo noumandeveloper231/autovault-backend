@@ -11,7 +11,11 @@ const strongPassword = z
   .refine(isStrongPassword, { message: STRONG_PASSWORD_MESSAGE });
 
 export const loginSchema = z.object({
-  email: z.string().email().transform((v) => v.toLowerCase().trim()),
+  email: z
+    .string()
+    .min(1)
+    .max(254)
+    .transform((v) => v.toLowerCase().trim()),
   password: z.string().min(1).max(128),
   portal: z
     .enum(["admin", "wholesale", "sales_rep", "sales-rep", "owner", "cpa"])

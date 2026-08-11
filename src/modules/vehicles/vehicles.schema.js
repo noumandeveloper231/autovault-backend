@@ -66,13 +66,18 @@ export const createVehicleSchema = z.object({
 });
 
 const addOnItemSchema = z.object({
-  desc: z.string().min(1, "Description is required"),
-  type: z.string().min(1, "Type is required"),
-  price: z.coerce.number().min(0, "Price must be >= 0"),
+  desc: z.string().max(200).default(""),
+  type: z.string().max(80).default(""),
+  price: z.coerce.number().min(0, "Price must be >= 0").default(0),
+  /** Dealer cost of the add-on (COGS); upcharge/sale price is `price`. */
+  cost: z.coerce.number().min(0).default(0),
 });
 
 const feesSchema = z.object({
   addOnItems: z.array(addOnItemSchema).default([]),
+  netCheck: z.coerce.number().min(0).optional().nullable(),
+  netCheckReason: z.string().max(200).optional().nullable(),
+  netCheckNotes: z.string().max(2000).optional().nullable(),
 }).catchall(z.any());
 
 export const updateVehicleSchema = createVehicleSchema
@@ -114,6 +119,7 @@ export const createVehicleExpenseSchema = z.object({
   isInternal: z.boolean().optional(),
   paymentStatus: z.enum(["unpaid", "paid", "partial"]).optional(),
   datePaid: z.coerce.date().optional().nullable(),
+  receiptStoragePath: z.string().max(2000).optional().nullable(),
 });
 
 export const updateVehicleExpenseSchema = createVehicleExpenseSchema
@@ -135,6 +141,7 @@ export const createFlooringPlanSchema = z.object({
   lateFeeAfterDays: z.coerce.number().int().min(0).optional().nullable(),
   gracePeriodDays: z.coerce.number().int().min(0).optional().nullable(),
   isActive: z.boolean().optional(),
+  configJson: z.any().optional().nullable(),
 });
 
 export const updateFlooringPlanSchema = createFlooringPlanSchema

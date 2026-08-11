@@ -190,22 +190,55 @@ export async function markSold(vehicleId, payload, ctx) {
 
   const salesTax = roundMoney(payload.salesTaxAmount ?? 0);
   const licenseFees = roundMoney(payload.licenseFees ?? 0);
-  const additionalExpenses = roundMoney(payload.additionalExpenses ?? 0);
-  const totalPriceOtd = roundMoney(soldPrice + salesTax + licenseFees);
+  const feesObj =
+    payload.fees && typeof payload.fees === "object" ? payload.fees : {};
+  const addOnItems = Array.isArray(feesObj.addOnItems) ? feesObj.addOnItems : [];
+  const addOnCostFromItems = roundMoney(
+    addOnItems.reduce((s, a) => s + (Number(a.cost) || 0), 0),
+  );
+  const addOnRevFromItems = roundMoney(
+    addOnItems.reduce((s, a) => s + (Number(a.price) || 0), 0),
+  );
+  const hasItemizedAddOnCosts = addOnItems.some(
+    (a) => a.cost != null && Number(a.cost) > 0,
+  );
+  // additionalExpenses = dealer add-on COGS (not upcharge revenue).
+  // Prefer payload; else itemized costs; else legacy scalar when items lack cost.
+  const additionalExpenses = roundMoney(
+    payload.additionalExpenses != null
+      ? payload.additionalExpenses
+      : hasItemizedAddOnCosts
+        ? addOnCostFromItems
+        : addOnCostFromItems || 0,
+  );
+  const totalPriceOtd = roundMoney(
+    soldPrice + addOnRevFromItems + salesTax + licenseFees,
+  );
   const netCheckRaw =
     payload.netCheck ??
-    (payload.fees && payload.fees.netCheck != null
-      ? payload.fees.netCheck
-      : null);
+    (feesObj.netCheck != null ? feesObj.netCheck : null);
   const hasNetCheck =
     netCheckRaw !== null &&
     netCheckRaw !== undefined &&
     netCheckRaw !== "";
+  // Financed: Net Check already includes dealer reserve / add-on upcharges.
+  // Cash/retail: sold price + add-on revenue − invested − add-on cost − commission.
   const profitNet = hasNetCheck
     ? roundMoney(
-        Number(netCheckRaw) - salesTax - licenseFees - totalInvested - commissionAmount,
+        Number(netCheckRaw) -
+          salesTax -
+          licenseFees -
+          totalInvested -
+          additionalExpenses -
+          commissionAmount,
       )
-    : roundMoney(grossProfit - commissionAmount - additionalExpenses);
+    : roundMoney(
+        soldPrice +
+          addOnRevFromItems -
+          totalInvested -
+          additionalExpenses -
+          commissionAmount,
+      );
   const saleDate = payload.saleDate || vehicle.soldAt || new Date();
 
   // Sequential writes (not interactive $transaction) — Neon pooled
@@ -459,10 +492,56 @@ export async function importPreviousSold(payload, ctx) {
   const repairs = roundMoney(payload.reconditioningCost ?? 0);
   const other = roundMoney(payload.otherExpenses ?? 0);
   const flooring = roundMoney(payload.flooringFees ?? 0);
-  const addOns = roundMoney(payload.addOnsCost ?? 0);
+  const addOnItems = Array.isArray(payload.addOnItems)
+    ? payload.addOnItems
+        .map((a) => ({
+          desc: String(a.desc || a.name || "").trim(),
+          type: String(a.type || a.category || "Add-On").trim() || "Add-On",
+          price: roundMoney(a.price ?? 0),
+          cost: roundMoney(a.cost ?? 0),
+        }))
+        .filter(
+          (a) =>
+            a.cost > 0 ||
+            a.price > 0 ||
+            a.desc ||
+            (a.type && a.type !== "Add-On"),
+        )
+    : [];
+  const addOnsFromItems = roundMoney(
+    addOnItems.reduce((s, a) => s + (Number(a.cost) || 0), 0),
+  );
+  const addOnRevenue = roundMoney(
+    addOnItems.reduce((s, a) => s + (Number(a.price) || 0), 0),
+  );
+  const hasItemizedCosts = addOnItems.some(
+    (a) => a.cost != null && Number(a.cost) > 0,
+  );
+  const addOns = roundMoney(
+    hasItemizedCosts
+      ? addOnsFromItems
+      : payload.addOnsCost != null
+        ? payload.addOnsCost
+        : addOnsFromItems,
+  );
   const soldPrice = roundMoney(payload.soldPrice);
   const salesTax = roundMoney(payload.salesTaxAmount ?? 0);
   const licenseFees = roundMoney(payload.licenseFees ?? 0);
+  const netCheckRaw = payload.netCheck;
+  const hasNetCheck =
+    netCheckRaw !== null &&
+    netCheckRaw !== undefined &&
+    netCheckRaw !== "";
+  const jacketFees = {
+    addOnItems,
+    ...(hasNetCheck ? { netCheck: roundMoney(Number(netCheckRaw) || 0) } : {}),
+    ...(payload.netCheckReason
+      ? { netCheckReason: String(payload.netCheckReason).slice(0, 200) }
+      : {}),
+    ...(payload.netCheckNotes
+      ? { netCheckNotes: String(payload.netCheckNotes).slice(0, 2000) }
+      : {}),
+  };
 
   const totalInvested = roundMoney(
     price + fees + repairs + other + flooring + addOns,
@@ -553,9 +632,17 @@ export async function importPreviousSold(payload, ctx) {
     prisma,
   );
 
-  const grossProfit = roundMoney(soldPrice - totalInvested);
-  const totalPriceOtd = roundMoney(soldPrice + salesTax + licenseFees);
-  const profitNet = roundMoney(grossProfit - commissionAmount);
+  const grossProfit = roundMoney(soldPrice + addOnRevenue - totalInvested);
+  const totalPriceOtd = roundMoney(soldPrice + addOnRevenue + salesTax + licenseFees);
+  const profitNet = hasNetCheck
+    ? roundMoney(
+        Number(netCheckRaw) -
+          salesTax -
+          licenseFees -
+          totalInvested -
+          commissionAmount,
+      )
+    : roundMoney(grossProfit - commissionAmount);
 
   // Deal stores sale/customer data; deal jacket is auto-created below.
   const deal = await prisma.deal.create({
@@ -610,14 +697,14 @@ export async function importPreviousSold(payload, ctx) {
       amountFinanced: 0,
       balanceDue: totalPriceOtd,
       totalInvested,
-      additionalExpenses: 0,
+      additionalExpenses: addOns,
       commissionAmount,
       profitGross: grossProfit,
       profitNet,
       tradeInAllowance: 0,
       warrantyAmount: 0,
       gapAmount: 0,
-      fees: {},
+      fees: jacketFees,
       lender: null,
       rosNumber,
       notes: payload.notes || "Imported as a previously sold vehicle.",

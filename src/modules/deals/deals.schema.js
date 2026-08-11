@@ -32,6 +32,8 @@ export const markSoldSchema = z
       .default("pending_review"),
     additionalExpenses: z.coerce.number().min(0).default(0),
     fees: z.any().default({}),
+    /** Finance-company remittance (optional). Prefer fees.netCheck when both sent. */
+    netCheck: z.coerce.number().min(0).optional().nullable(),
     titleReceived: z.boolean().optional(),
     titlePresent: z.boolean().optional(),
   })
@@ -61,8 +63,24 @@ export const previousSoldSchema = z
     otherExpenses: z.coerce.number().min(0).default(0),
     flooringFees: z.coerce.number().min(0).default(0),
     addOnsCost: z.coerce.number().min(0).default(0),
+    /** Itemized add-ons: cost = dealer COGS, price = customer upcharge. */
+    addOnItems: z
+      .array(
+        z.object({
+          desc: z.string().max(200).default(""),
+          type: z.string().max(80).default(""),
+          price: z.coerce.number().min(0).default(0),
+          cost: z.coerce.number().min(0).default(0),
+        }),
+      )
+      .optional()
+      .default([]),
     salesTaxAmount: z.coerce.number().min(0).default(0),
     licenseFees: z.coerce.number().min(0).default(0),
+    /** Finance funding check that already includes dealer reserve / finance income. */
+    netCheck: z.coerce.number().min(0).optional().nullable(),
+    netCheckReason: z.string().max(200).optional().nullable(),
+    netCheckNotes: z.string().max(2000).optional().nullable(),
     titleReceived: z.boolean().default(true),
     titlePresent: z.boolean().optional(),
     customerName: z.string().min(1).optional(),

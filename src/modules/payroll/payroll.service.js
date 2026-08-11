@@ -14,6 +14,128 @@ import { sendEmail } from "../../utils/email.js";
 import { salesRepWelcomeEmail } from "../../utils/email-templates.js";
 import { env } from "../../config/env.js";
 
+const ROLE_LABELS = {
+  sales_rep: "sales rep",
+  cpa: "CPA",
+  owner: "dealership owner",
+  manager: "manager",
+  platform_owner: "platform owner",
+};
+
+function roleLabel(role) {
+  return ROLE_LABELS[role] || String(role || "user").replace(/_/g, " ");
+}
+
+function normalizeEmail(email) {
+  return String(email || "")
+    .trim()
+    .toLowerCase();
+}
+
+function normalizeUsername(username) {
+  return String(username || "")
+    .trim()
+    .toLowerCase();
+}
+
+/**
+ * Login is global by email/username, so conflicts must be checked across
+ * all dealerships — not only the current tenant.
+ */
+export async function findLoginIdentityConflicts({
+  email,
+  username,
+  excludeUserId = null,
+} = {}) {
+  const result = { email: null, username: null };
+  const emailNorm = email ? normalizeEmail(email) : "";
+  const usernameNorm = username ? normalizeUsername(username) : "";
+
+  if (emailNorm) {
+    const hit = await prisma.user.findFirst({
+      where: {
+        email: emailNorm,
+        deletedAt: null,
+        ...(excludeUserId ? { id: { not: excludeUserId } } : {}),
+      },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        fullName: true,
+        dealership: { select: { name: true } },
+      },
+    });
+    if (hit) {
+      const dealer = hit.dealership?.name
+        ? ` at ${hit.dealership.name}`
+        : "";
+      result.email = {
+        available: false,
+        role: hit.role,
+        message: `This email is already linked to a ${roleLabel(hit.role)} account${dealer}. Use a different email.`,
+      };
+    } else {
+      result.email = { available: true, message: "Email is available." };
+    }
+  }
+
+  if (usernameNorm) {
+    const hit = await prisma.user.findFirst({
+      where: {
+        deletedAt: null,
+        ...(excludeUserId ? { id: { not: excludeUserId } } : {}),
+        username: { equals: usernameNorm, mode: "insensitive" },
+      },
+      select: {
+        id: true,
+        username: true,
+        role: true,
+        dealership: { select: { name: true } },
+      },
+    });
+    if (hit) {
+      const dealer = hit.dealership?.name
+        ? ` at ${hit.dealership.name}`
+        : "";
+      result.username = {
+        available: false,
+        role: hit.role,
+        message: `This username is already taken by a ${roleLabel(hit.role)} account${dealer}. Choose another.`,
+      };
+    } else {
+      result.username = { available: true, message: "Username is available." };
+    }
+  }
+
+  return result;
+}
+
+async function assertLoginIdentityAvailable({
+  email,
+  username,
+  excludeUserId = null,
+} = {}) {
+  const checks = await findLoginIdentityConflicts({
+    email,
+    username,
+    excludeUserId,
+  });
+  if (checks.email && checks.email.available === false) {
+    throw conflict(checks.email.message, {
+      field: "email",
+      role: checks.email.role,
+    });
+  }
+  if (checks.username && checks.username.available === false) {
+    throw conflict(checks.username.message, {
+      field: "username",
+      role: checks.username.role,
+    });
+  }
+  return checks;
+}
+
 function serializeSalesRep(user, profile) {
   return {
     id: user.id,
@@ -26,7 +148,9 @@ function serializeSalesRep(user, profile) {
     profile: profile
       ? {
           id: profile.id,
-          birthDate: profile.birthDate,
+          birthDate: profile.birthDate
+            ? new Date(profile.birthDate).toISOString().slice(0, 10)
+            : null,
           baseSalary: toNum(profile.baseSalary),
           payFrequency: profile.payFrequency,
           payDay: profile.payDay,
@@ -115,6 +239,7 @@ export async function listSalesReps(dealershipId, query) {
     dealershipId,
     role: "sales_rep",
     deletedAt: null,
+    isActive: true,
   };
   if (q) {
     where.OR = [
@@ -141,10 +266,16 @@ export async function listSalesReps(dealershipId, query) {
 }
 
 export async function createSalesRep(dealershipId, payload, ctx) {
-  const existing = await prisma.user.findFirst({
-    where: { dealershipId, email: payload.email, deletedAt: null },
-  });
-  if (existing) throw conflict("A user with this email already exists.");
+  const email = normalizeEmail(payload.email);
+  const usernameRaw = payload.username ? String(payload.username).trim() : "";
+  const username = usernameRaw || null;
+
+  if (!email) throw conflict("Email is required for a sales rep login.");
+  if (!username || username.length < 2) {
+    throw conflict("Username is required (at least 2 characters).");
+  }
+
+  await assertLoginIdentityAvailable({ email, username });
 
   const password = payload.password ?? generateTemporaryPassword();
   const passwordHash = await hashPassword(password);
@@ -152,8 +283,8 @@ export async function createSalesRep(dealershipId, payload, ctx) {
   const result = await prisma.$transaction(async (tx) => {
     const user = await tx.user.create({
       data: {
-        email: payload.email.trim().toLowerCase(),
-        username: payload.username ?? null,
+        email,
+        username,
         passwordHash,
         fullName: payload.fullName.trim(),
         phone: payload.phone ?? null,
@@ -373,11 +504,28 @@ export async function updateSalesRep(id, dealershipId, payload, ctx) {
     payload = { ...payload, payDocUrl: dataUrl };
   }
 
+  if (payload.username !== undefined) {
+    const nextUsername = payload.username
+      ? String(payload.username).trim()
+      : null;
+    if (nextUsername && nextUsername.length < 2) {
+      throw conflict("Username must be at least 2 characters.");
+    }
+    await assertLoginIdentityAvailable({
+      username: nextUsername,
+      excludeUserId: id,
+    });
+  }
+
   const updated = await prisma.$transaction(async (tx) => {
     const u = await tx.user.update({
       where: { id },
       data: {
-        ...(payload.username !== undefined && { username: payload.username }),
+        ...(payload.username !== undefined && {
+          username: payload.username
+            ? String(payload.username).trim()
+            : null,
+        }),
         ...(payload.fullName != null && { fullName: payload.fullName.trim() }),
         ...(payload.phone !== undefined && { phone: payload.phone }),
         ...(payload.isActive != null && { isActive: payload.isActive }),
@@ -418,6 +566,122 @@ export async function updateSalesRep(id, dealershipId, payload, ctx) {
   }
 
   return serializeSalesRep(updated.user, updated.profile);
+}
+
+export async function getSalesRepArchivePreview(id, dealershipId) {
+  const user = await prisma.user.findFirst({
+    where: { id, dealershipId, role: "sales_rep", deletedAt: null },
+    select: { id: true, fullName: true, email: true, username: true, isActive: true },
+  });
+  if (!user) throw notFound("Sales rep not found.");
+
+  const [
+    deals,
+    jackets,
+    customers,
+    commissionsOpen,
+    commissionsPaid,
+    payrollItems,
+  ] = await Promise.all([
+    prisma.deal.count({ where: { salesRepId: id, deletedAt: null } }),
+    prisma.dealJacket.count({ where: { salesRepId: id, deletedAt: null } }),
+    prisma.customer.count({ where: { salesRepId: id, deletedAt: null } }),
+    prisma.salesRepCommission.count({
+      where: {
+        salesRepId: id,
+        deletedAt: null,
+        status: { in: ["pending_review", "approved"] },
+      },
+    }),
+    prisma.salesRepCommission.count({
+      where: { salesRepId: id, deletedAt: null, status: "paid" },
+    }),
+    prisma.payrollPayoutItem.count({ where: { salesRepId: id } }),
+  ]);
+
+  const linkedTotal =
+    deals + jackets + customers + commissionsOpen + commissionsPaid + payrollItems;
+
+  return {
+    salesRep: user,
+    links: {
+      deals,
+      jackets,
+      customers,
+      openCommissions: commissionsOpen,
+      paidCommissions: commissionsPaid,
+      payrollItems,
+      total: linkedTotal,
+    },
+    canHardDelete: linkedTotal === 0,
+    recommendedAction: "archive",
+    message:
+      linkedTotal > 0
+        ? `${user.fullName} has linked records. Archive to keep history and pause payroll/unpaid commissions.`
+        : `${user.fullName} has no linked records. Archiving will deactivate the login and remove them from active lists.`,
+  };
+}
+
+/**
+ * Soft-archive a sales rep: deactivate login, hide from active lists,
+ * pause unpaid commissions, keep deal/jacket/customer history intact.
+ */
+export async function archiveSalesRep(id, dealershipId, ctx) {
+  const preview = await getSalesRepArchivePreview(id, dealershipId);
+
+  const result = await prisma.$transaction(async (tx) => {
+    const pausedCommissions = await tx.salesRepCommission.updateMany({
+      where: {
+        salesRepId: id,
+        dealershipId,
+        deletedAt: null,
+        status: { in: ["pending_review", "approved"] },
+      },
+      data: { deletedAt: new Date(), status: "rejected" },
+    });
+
+    const user = await tx.user.update({
+      where: { id },
+      data: {
+        isActive: false,
+        deletedAt: new Date(),
+      },
+    });
+
+    return { user, pausedCommissions: pausedCommissions.count };
+  }, { timeout: 30000 });
+
+  await writeAuditLog({
+    dealershipId,
+    changedById: ctx.userId,
+    entityType: "SalesRep",
+    entityId: id,
+    action: "archive",
+    newValues: {
+      pausedCommissions: result.pausedCommissions,
+      links: preview.links,
+    },
+    ipAddress: ctx.ipAddress,
+  });
+
+  try {
+    const { ensureSalesRepGroupChat } = await import("../messages/messages.service.js");
+    await ensureSalesRepGroupChat(dealershipId);
+  } catch (groupErr) {
+    console.warn("[archiveSalesRep] Failed to sync Group Chat:", groupErr?.message || groupErr);
+  }
+
+  return {
+    message: "Sales rep archived",
+    salesRep: {
+      id: result.user.id,
+      fullName: result.user.fullName,
+      isActive: false,
+      deletedAt: result.user.deletedAt,
+    },
+    pausedCommissions: result.pausedCommissions,
+    links: preview.links,
+  };
 }
 
 // --- Staff ---

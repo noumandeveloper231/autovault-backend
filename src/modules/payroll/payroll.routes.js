@@ -23,6 +23,7 @@ import {
   updatePayrollRunSchema,
   listQuerySchema,
   idParamSchema,
+  checkAvailabilityQuerySchema,
 } from "./payroll.schema.js";
 import * as ctrl from "./payroll.controller.js";
 
@@ -38,6 +39,12 @@ salesRepsRouter.get(
   validateQuery(listQuerySchema),
   asyncHandler(ctrl.listSalesReps),
 );
+salesRepsRouter.get(
+  "/check-availability",
+  requireRoles("owner", "manager"),
+  validateQuery(checkAvailabilityQuerySchema),
+  asyncHandler(ctrl.checkSalesRepAvailability),
+);
 salesRepsRouter.post(
   "/",
   requireRoles("owner", "manager"),
@@ -50,6 +57,18 @@ salesRepsRouter.patch(
   validateParams(idParamSchema),
   validateBody(updateSalesRepSchema),
   asyncHandler(ctrl.updateSalesRep),
+);
+salesRepsRouter.get(
+  "/:id/archive-preview",
+  requireRoles("owner", "manager"),
+  validateParams(idParamSchema),
+  asyncHandler(ctrl.getSalesRepArchivePreview),
+);
+salesRepsRouter.post(
+  "/:id/archive",
+  requireRoles("owner", "manager"),
+  validateParams(idParamSchema),
+  asyncHandler(ctrl.archiveSalesRep),
 );
 salesRepsRouter.post(
   "/:id/send-invite",

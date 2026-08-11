@@ -53,9 +53,24 @@ export function serializeUser(user, dealership = null) {
   };
 }
 
-async function loadUserWithDealership(email) {
+async function loadUserWithDealership(loginId) {
+  const value = String(loginId || "")
+    .trim()
+    .toLowerCase();
+  if (!value) return null;
+  const looksLikeEmail = value.includes("@");
   return prisma.user.findFirst({
-    where: { email, deletedAt: null },
+    where: {
+      deletedAt: null,
+      ...(looksLikeEmail
+        ? { email: value }
+        : {
+            OR: [
+              { email: value },
+              { username: { equals: value, mode: "insensitive" } },
+            ],
+          }),
+    },
     include: { dealership: true },
   });
 }

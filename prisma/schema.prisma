@@ -588,6 +588,8 @@ model FlooringPlan {
   lateFeeAfterDays     Int?
   gracePeriodDays      Int?
   isActive             Boolean          @default(true)
+  /** Full dealer UI flooring config (tiers, payoffDays, applied, scope). */
+  configJson           Json?
   createdById          String?          @db.Uuid
   createdAt            DateTime         @default(now())
   updatedAt            DateTime         @updatedAt
@@ -938,6 +940,8 @@ model DealershipTaxSettings {
   state           String?
   filingFrequency TaxFilingFrequency  @default(quarterly)
   reminderDays    Int                 @default(14)
+  nextDueDate     DateTime?           @db.Date
+  notes           String?
   createdAt       DateTime            @default(now())
   updatedAt       DateTime            @updatedAt
 

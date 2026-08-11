@@ -63,6 +63,7 @@ export async function createFlooringPlan(
       lateFeeAfterDays: data.lateFeeAfterDays ?? null,
       gracePeriodDays: data.gracePeriodDays ?? null,
       isActive: data.isActive ?? true,
+      configJson: data.configJson ?? null,
     },
   });
 

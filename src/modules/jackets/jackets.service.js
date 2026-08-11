@@ -191,12 +191,22 @@ function computeFinancials(vehicle, payload) {
     commissionType,
     resolved: payload._resolvedCommission,
   });
-  const additionalExpenses = roundMoney(payload.additionalExpenses ?? 0);
+  const feesObj =
+    payload.fees && typeof payload.fees === "object" ? payload.fees : {};
+  const addOnItems = Array.isArray(feesObj.addOnItems) ? feesObj.addOnItems : [];
+  const addOnCostFromItems = roundMoney(
+    addOnItems.reduce((s, a) => s + (Number(a.cost) || 0), 0),
+  );
+  const addOnRevFromItems = roundMoney(
+    addOnItems.reduce((s, a) => s + (Number(a.price) || 0), 0),
+  );
+  const additionalExpenses = roundMoney(
+    payload.additionalExpenses != null
+      ? payload.additionalExpenses
+      : addOnCostFromItems,
+  );
   const netCheckRaw =
-    payload.netCheck ??
-    (payload.fees && payload.fees.netCheck != null
-      ? payload.fees.netCheck
-      : null);
+    payload.netCheck ?? (feesObj.netCheck != null ? feesObj.netCheck : null);
   const hasNetCheck =
     netCheckRaw !== null &&
     netCheckRaw !== undefined &&
@@ -207,16 +217,23 @@ function computeFinancials(vehicle, payload) {
       0,
   );
   const licenseFees = roundMoney(payload.licenseFees ?? 0);
-  // Net Check − Sales Tax − Reg Fees = amount applied to profit
+  // Net Check − tax − reg − invested − add-on cost − commission
   const profitNet = hasNetCheck
     ? roundMoney(
         Number(netCheckRaw) -
           salesTax -
           licenseFees -
           vehicleInvested -
+          additionalExpenses -
           commissionAmount,
       )
-    : roundMoney(profitGross - commissionAmount - additionalExpenses);
+    : roundMoney(
+        soldPrice +
+          addOnRevFromItems -
+          vehicleInvested -
+          additionalExpenses -
+          commissionAmount,
+      );
   const totalSalePrice =
     payload.totalSalePrice ??
     soldPrice + (payload.totalTax ?? 0);

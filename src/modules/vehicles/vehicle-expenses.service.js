@@ -97,6 +97,7 @@ export async function createExpense(
         isInternal: data.isInternal ?? false,
         paymentStatus: data.paymentStatus ?? "unpaid",
         datePaid: data.datePaid ?? null,
+        receiptStoragePath: data.receiptStoragePath ?? null,
       },
     });
 

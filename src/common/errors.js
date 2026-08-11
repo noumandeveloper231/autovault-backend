@@ -20,8 +20,8 @@ export function forbidden(message = "Forbidden") {
   return new AppError(message, 403, "FORBIDDEN");
 }
 
-export function conflict(message = "Conflict") {
-  return new AppError(message, 409, "CONFLICT");
+export function conflict(message = "Conflict", details = undefined) {
+  return new AppError(message, 409, "CONFLICT", details);
 }
 
 export function tooManyRequests(message = "Too many requests", details) {

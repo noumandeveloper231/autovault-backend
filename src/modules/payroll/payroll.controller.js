@@ -27,6 +27,15 @@ export async function createSalesRep(req, res) {
   return res.status(201).json(result);
 }
 
+export async function checkSalesRepAvailability(req, res) {
+  const result = await payrollService.findLoginIdentityConflicts({
+    email: req.query.email,
+    username: req.query.username,
+    excludeUserId: req.query.excludeUserId,
+  });
+  return res.json(result);
+}
+
 export async function updateSalesRep(req, res) {
   const salesRep = await payrollService.updateSalesRep(
     req.params.id,
@@ -35,6 +44,23 @@ export async function updateSalesRep(req, res) {
     ctx(req),
   );
   return res.json({ salesRep });
+}
+
+export async function getSalesRepArchivePreview(req, res) {
+  const preview = await payrollService.getSalesRepArchivePreview(
+    req.params.id,
+    req.auth.dealershipId,
+  );
+  return res.json(preview);
+}
+
+export async function archiveSalesRep(req, res) {
+  const result = await payrollService.archiveSalesRep(
+    req.params.id,
+    req.auth.dealershipId,
+    ctx(req),
+  );
+  return res.json(result);
 }
 
 export async function sendRepInvite(req, res) {

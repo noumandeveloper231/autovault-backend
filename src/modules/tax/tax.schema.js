@@ -7,6 +7,8 @@ export const updateTaxSettingsSchema = z
       .enum(["monthly", "quarterly", "annual", "custom"])
       .optional(),
     reminderDays: z.coerce.number().int().min(1).max(90).optional(),
+    nextDueDate: z.coerce.date().optional().nullable(),
+    notes: z.string().max(2000).optional().nullable(),
   })
   .refine((d) => Object.keys(d).length > 0, { message: "No fields to update" });
 

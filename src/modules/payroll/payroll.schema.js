@@ -22,7 +22,14 @@ function refineCommission(data, ctx) {
 
 export const createSalesRepSchema = z
   .object({
-    username: z.string().min(2).optional(),
+    username: z
+      .string()
+      .min(2, "Username must be at least 2 characters")
+      .max(64)
+      .regex(
+        /^[a-zA-Z0-9._-]+$/,
+        "Username may only contain letters, numbers, dots, underscores, and hyphens",
+      ),
     email: z.string().email(),
     fullName: z.string().min(1),
     phone: z.string().optional(),
@@ -39,6 +46,8 @@ export const createSalesRepSchema = z
   .superRefine(refineCommission)
   .transform((d) => ({
     ...d,
+    username: String(d.username).trim(),
+    email: String(d.email).trim().toLowerCase(),
     commissionRate:
       d.commissionRate != null
         ? d.commissionRate
@@ -49,7 +58,16 @@ export const createSalesRepSchema = z
 
 export const updateSalesRepSchema = z
   .object({
-    username: z.string().min(2).optional(),
+    username: z
+      .string()
+      .min(2)
+      .max(64)
+      .regex(
+        /^[a-zA-Z0-9._-]+$/,
+        "Username may only contain letters, numbers, dots, underscores, and hyphens",
+      )
+      .optional()
+      .nullable(),
     fullName: z.string().min(1).optional(),
     phone: z.string().optional(),
     isActive: z.boolean().optional(),
@@ -164,3 +182,13 @@ export const listQuerySchema = z.object({
 export const idParamSchema = z.object({
   id: z.string().uuid(),
 });
+
+export const checkAvailabilityQuerySchema = z
+  .object({
+    email: z.string().email().optional(),
+    username: z.string().min(2).max(64).optional(),
+    excludeUserId: z.string().uuid().optional(),
+  })
+  .refine((d) => !!(d.email || d.username), {
+    message: "Provide email and/or username to check",
+  });

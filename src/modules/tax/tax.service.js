@@ -12,12 +12,34 @@ function serializeTaxSettings(s) {
     state: s.state,
     filingFrequency: s.filingFrequency,
     reminderDays: s.reminderDays,
+    nextDueDate: s.nextDueDate
+      ? new Date(s.nextDueDate).toISOString().slice(0, 10)
+      : null,
+    notes: s.notes || "",
     createdAt: s.createdAt,
     updatedAt: s.updatedAt,
   };
 }
 
 function serializeTaxPeriod(p) {
+  const deals = p.deals?.map((link) => ({
+    id: link.id,
+    dealJacketId: link.dealJacketId,
+    createdAt: link.createdAt,
+    dealJacket: link.dealJacket
+      ? {
+          id: link.dealJacket.id,
+          jacketNumber: link.dealJacket.jacketNumber,
+          soldPrice: toNum(link.dealJacket.soldPrice),
+          totalTax: toNum(link.dealJacket.totalTax),
+          dateSold: link.dealJacket.dateSold,
+        }
+      : undefined,
+  }));
+  const totalTax = (deals || []).reduce(
+    (s, d) => s + (d.dealJacket?.totalTax || 0),
+    0,
+  );
   return {
     id: p.id,
     dealershipId: p.dealershipId,
@@ -34,21 +56,9 @@ function serializeTaxPeriod(p) {
       filePath: d.filePath,
       uploadedAt: d.uploadedAt,
     })),
-    deals: p.deals?.map((link) => ({
-      id: link.id,
-      dealJacketId: link.dealJacketId,
-      createdAt: link.createdAt,
-      dealJacket: link.dealJacket
-        ? {
-            id: link.dealJacket.id,
-            jacketNumber: link.dealJacket.jacketNumber,
-            soldPrice: toNum(link.dealJacket.soldPrice),
-            totalTax: toNum(link.dealJacket.totalTax),
-            dateSold: link.dealJacket.dateSold,
-          }
-        : undefined,
-    })),
+    deals,
     dealCount: p._count?.deals,
+    totalTax,
   };
 }
 
@@ -92,6 +102,8 @@ export async function updateTaxSettings(dealershipId, payload, ctx) {
       state: payload.state ?? null,
       filingFrequency: payload.filingFrequency ?? "quarterly",
       reminderDays: payload.reminderDays ?? 14,
+      nextDueDate: payload.nextDueDate ?? null,
+      notes: payload.notes ?? null,
     },
     update: {
       ...(payload.state !== undefined && { state: payload.state }),
@@ -101,6 +113,10 @@ export async function updateTaxSettings(dealershipId, payload, ctx) {
       ...(payload.reminderDays != null && {
         reminderDays: payload.reminderDays,
       }),
+      ...(payload.nextDueDate !== undefined && {
+        nextDueDate: payload.nextDueDate,
+      }),
+      ...(payload.notes !== undefined && { notes: payload.notes }),
     },
   });
 
