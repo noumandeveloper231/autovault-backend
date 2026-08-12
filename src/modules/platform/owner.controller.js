@@ -58,4 +58,17 @@ export async function listDealerships(req, res) {
   return res.json(result);
 }
 
+export async function listSupportMessages(req, res) {
+  const result = await ownerService.listSupportMessages(req.query);
+  return res.json(result);
+}
+
+export async function updateSupportMessage(req, res) {
+  const message = await ownerService.updateSupportMessage(
+    req.params.id,
+    req.body.status,
+  );
+  return res.json({ message });
+}
+
 export { ownerLoginSchema };

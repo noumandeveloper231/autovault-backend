@@ -55,6 +55,7 @@ enum VehicleStatus {
   loss
   wholesale
   out_of_state_sale
+  arbitration
 }
 
 enum CustomerStatus {
@@ -235,6 +236,7 @@ model Dealership {
   cardExpMonth         Int?
   cardExpYear          Int?
   currentPeriodEnd     DateTime?
+  kpiColors            Json?
   createdAt            DateTime         @default(now())
   updatedAt            DateTime         @updatedAt
   deletedAt            DateTime?
@@ -267,6 +269,7 @@ model Dealership {
   pricingHistory       PricingHistory[]
   vehicleImages        VehicleImage[]
   billingPayments      BillingPayment[]
+  supportMessages      SupportMessage[]
 
   @@index([status])
   @@index([state])
@@ -354,6 +357,7 @@ model User {
   filesUploaded        FileObject[]
   commissionsPaid      SalesRepCommission[] @relation("CommissionPaidBy")
   commissionsAsRep     SalesRepCommission[] @relation("CommissionSalesRep")
+  supportMessages      SupportMessage[]
 
   @@unique([dealershipId, email])
   @@index([email])
@@ -1303,4 +1307,27 @@ model FileObject {
 
   @@index([dealershipId, sourceEntity, sourceEntityId])
   @@map("files")
+}
+
+// ??? Support / Client CRM ?????????????????????????????????????????????????????
+
+model SupportMessage {
+  id           String     @id @default(uuid()) @db.Uuid
+  dealershipId String     @db.Uuid
+  dealership   Dealership @relation(fields: [dealershipId], references: [id], onDelete: Cascade)
+  userId       String?    @db.Uuid
+  user         User?      @relation(fields: [userId], references: [id], onDelete: SetNull)
+  name         String
+  role         String
+  topic        String
+  subject      String
+  priority     String
+  message      String     @db.Text
+  status       String     @default("new")
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@index([dealershipId])
+  @@index([status])
+  @@map("support_messages")
 }

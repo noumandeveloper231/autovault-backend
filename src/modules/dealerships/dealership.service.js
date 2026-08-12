@@ -36,9 +36,15 @@ function serializeDealership(d) {
     status: d.status,
     paymentStatus: toApiPaymentStatus(d.paymentStatus),
     monthlyFee: d.monthlyFee != null ? Number(d.monthlyFee) : null,
+    kpiColors: d.kpiColors && typeof d.kpiColors === "object" ? d.kpiColors : {},
     createdAt: d.createdAt,
     updatedAt: d.updatedAt,
   };
+}
+
+function normalizeKpiColors(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  return value;
 }
 
 export async function getMe(dealershipId) {
@@ -47,6 +53,49 @@ export async function getMe(dealershipId) {
   });
   if (!dealership) throw notFound("Dealership not found.");
   return serializeDealership(dealership);
+}
+
+export async function getPreferences(dealershipId) {
+  const dealership = await prisma.dealership.findFirst({
+    where: { id: dealershipId, deletedAt: null },
+    select: { id: true, kpiColors: true },
+  });
+  if (!dealership) throw notFound("Dealership not found.");
+  return {
+    preferences: {
+      kpiColors: normalizeKpiColors(dealership.kpiColors),
+    },
+  };
+}
+
+export async function updatePreferences(dealershipId, data, changedById, ipAddress) {
+  const existing = await prisma.dealership.findFirst({
+    where: { id: dealershipId, deletedAt: null },
+  });
+  if (!existing) throw notFound("Dealership not found.");
+
+  const kpiColors = normalizeKpiColors(data.kpiColors);
+  const updated = await prisma.dealership.update({
+    where: { id: dealershipId },
+    data: { kpiColors },
+  });
+
+  await writeAuditLog({
+    dealershipId,
+    changedById,
+    entityType: "Dealership",
+    entityId: dealershipId,
+    action: "update_preferences",
+    oldValues: { kpiColors: normalizeKpiColors(existing.kpiColors) },
+    newValues: { kpiColors },
+    ipAddress,
+  });
+
+  return {
+    preferences: {
+      kpiColors: normalizeKpiColors(updated.kpiColors),
+    },
+  };
 }
 
 export async function updateMe(dealershipId, data, changedById, ipAddress) {

@@ -10,6 +10,40 @@ import {
 } from "../../common/auth-middleware.js";
 import * as ctrl from "./dealership.controller.js";
 
+const HEX_COLOR = /^#[0-9A-Fa-f]{6}$/;
+const KPI_COLOR_KEYS = [
+  "inventory",
+  "titles",
+  "flooring",
+  "sold",
+  "profit",
+  "purchase",
+  "fees",
+  "repairs",
+  "tax",
+  "commission",
+  "cost",
+  "upcoming",
+  "gross",
+];
+
+const kpiColorsSchema = z
+  .record(
+    z.string(),
+    z.string().regex(HEX_COLOR, "Color must be a hex value like #RRGGBB"),
+  )
+  .superRefine((obj, ctx) => {
+    for (const key of Object.keys(obj)) {
+      if (!KPI_COLOR_KEYS.includes(key)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Unknown KPI color key: ${key}`,
+          path: [key],
+        });
+      }
+    }
+  });
+
 const updateSchema = z
   .object({
     name: z.string().min(2).max(150).optional(),
@@ -21,6 +55,10 @@ const updateSchema = z
     zip: z.string().max(12).optional().nullable(),
   })
   .refine((d) => Object.keys(d).length > 0, { message: "No fields to update" });
+
+const preferencesSchema = z.object({
+  kpiColors: kpiColorsSchema,
+});
 
 const router = express.Router();
 
@@ -37,6 +75,20 @@ router.patch(
   requireRoles("owner", "manager"),
   validateBody(updateSchema),
   asyncHandler(ctrl.updateMe),
+);
+router.get(
+  "/me/preferences",
+  authenticate,
+  requireTenant,
+  asyncHandler(ctrl.getPreferences),
+);
+router.patch(
+  "/me/preferences",
+  authenticate,
+  requireTenant,
+  requireRoles("owner", "manager"),
+  validateBody(preferencesSchema),
+  asyncHandler(ctrl.updatePreferences),
 );
 
 /** Platform owner listing */

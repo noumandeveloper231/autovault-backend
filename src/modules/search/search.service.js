@@ -9,6 +9,7 @@ const STATUS_LABEL = {
   loss: "Sold Loss",
   wholesale: "Wholesale",
   out_of_state_sale: "Out of State",
+  arbitration: "Arbitration",
 };
 
 function vehicleTitle(v) {

@@ -3,6 +3,7 @@ export const ACTIVE_INVENTORY_STATUSES = [
   "in_stock",
   "needs_attention",
   "pending_deal",
+  "arbitration",
 ];
 
 /** Exit statuses — vehicle has left active inventory. */

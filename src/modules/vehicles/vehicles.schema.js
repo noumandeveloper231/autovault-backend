@@ -11,6 +11,7 @@ const vehicleStatus = z.enum([
   "loss",
   "wholesale",
   "out_of_state_sale",
+  "arbitration",
 ]);
 
 export const listVehiclesQuerySchema = z.object({

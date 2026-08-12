@@ -17,6 +17,8 @@ import {
   getRegistration,
   getMetrics,
   listDealerships,
+  listSupportMessages,
+  updateSupportMessage,
 } from "./owner.controller.js";
 
 const authRouter = express.Router();
@@ -49,12 +51,36 @@ const dealershipsQuerySchema = paginationSchema.extend({
   state: z.string().length(2).optional(),
 });
 
+const supportMessagesQuerySchema = z.object({
+  status: z
+    .enum(["all", "new", "read", "resolved", "unread"])
+    .optional()
+    .default("all"),
+});
+
+const updateSupportMessageSchema = z.object({
+  status: z.enum(["new", "read", "resolved"]),
+});
+
 router.get("/metrics", ownerOrApiKey, asyncHandler(getMetrics));
 router.get(
   "/dealerships",
   ownerOrApiKey,
   validateQuery(dealershipsQuerySchema),
   asyncHandler(listDealerships),
+);
+router.get(
+  "/support-messages",
+  ownerOrApiKey,
+  validateQuery(supportMessagesQuerySchema),
+  asyncHandler(listSupportMessages),
+);
+router.patch(
+  "/support-messages/:id",
+  ownerOrApiKey,
+  validateParams(uuidParam),
+  validateBody(updateSupportMessageSchema),
+  asyncHandler(updateSupportMessage),
 );
 
 /** v1 mount: /api/v1/platform */

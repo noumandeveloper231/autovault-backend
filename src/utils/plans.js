@@ -5,6 +5,7 @@ export const PLAN_LABEL_TO_SLUG = {
   "Independent Dealers": "independent_dealer",
   "Growing Dealership": "growing_dealership",
   "Growing Dealerships": "growing_dealership",
+  "Fully Loaded": "growing_dealership",
 };
 
 export const PLAN_SLUG_TO_LABEL = {

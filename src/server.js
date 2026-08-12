@@ -56,6 +56,7 @@ import filesRoutes from "./modules/files/files.routes.js";
 import jennaRoutes from "./modules/jenna/jenna.routes.js";
 import billingRoutes from "./modules/billing/billing.routes.js";
 import { contactRouter } from "./modules/contact/contact.routes.js";
+import { supportRouter } from "./modules/support/support.routes.js";
 import { runTaxReminders } from "./jobs/tax-reminders.js";
 import { runBillingReminders } from "./jobs/billing-reminders.js";
 import { runMessageJobs } from "./jobs/messages.js";
@@ -185,6 +186,7 @@ app.use("/api/v1/billing", billingRoutes);
 app.use("/api/v1/registrations", registrationRouter);
 app.use("/api/v1/checkout", checkoutRouter);
 app.use("/api/v1/contact", contactRouter);
+app.use("/api/v1/support", supportRouter);
 app.use("/api/v1/platform", platformV1Routes);
 
 app.use("/api/registrations", registrationRouter);
