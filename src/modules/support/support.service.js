@@ -70,7 +70,7 @@ export async function createSupportMessage({
     include: { dealership: { select: { name: true } } },
   });
 
-  const to = env.CONTACT_TO_EMAIL || "support@autovault360.com";
+  const to = env.CONTACT_TO_EMAIL || "support@autovault.com";
   try {
     await sendEmail({
       to,
