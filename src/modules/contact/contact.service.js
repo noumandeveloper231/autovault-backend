@@ -55,7 +55,7 @@ export async function submitContact(payload, ip) {
   }
 
   const fullName = [first, last].filter(Boolean).join(" ");
-  const to = env.CONTACT_TO_EMAIL || "privacy@autovault360.com";
+  const to = env.CONTACT_TO_EMAIL || "support@autovault360.com";
   const siteUrl = String(env.FRONTEND_URL || "https://www.autovault360.com").replace(
     /\/+$/,
     "",

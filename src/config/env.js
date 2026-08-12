@@ -32,7 +32,7 @@ export const env = {
   BREVO_SENDER_EMAIL: process.env.BREVO_SENDER_EMAIL || "onboarding@noumandevs.online",
   BREVO_SENDER_NAME: process.env.BREVO_SENDER_NAME || "AutoVault",
   CONTACT_TO_EMAIL:
-    process.env.CONTACT_TO_EMAIL || "privacy@autovault360.com",
+    process.env.CONTACT_TO_EMAIL || "support@autovault360.com",
   // Prefer REDIS_URL for VPS/local Redis. Upstash REST is optional fallback.
   REDIS_URL: process.env.REDIS_URL || "",
   UPSTASH_REDIS_REST_URL: process.env.UPSTASH_REDIS_REST_URL || "",
