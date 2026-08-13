@@ -400,6 +400,99 @@ function contactFieldRow(label, value, { topBorder = false, accent = false } = {
   `;
 }
 
+function wrapTransactionalEmail({
+  preheader = "",
+  badge,
+  badgeColor = "#46D392",
+  title,
+  introHtml = "",
+  bodyHtml,
+  headerTint = "#173021",
+  footerHtml,
+}) {
+  const pre = preheader
+    ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:#0A0D10;font-size:1px;line-height:1px;">${preheader}</div>`
+    : "";
+  const footer =
+    footerHtml === undefined
+      ? `<p style="margin:22px 0 0 0;color:#5A636D;font-size:12px;line-height:1.6;">AutoVault Support &middot; Sent from the dealership CRM.</p>`
+      : footerHtml;
+  return `
+  <div style="margin:0;padding:0;background:#0A0D10;color:#EAECEF;font-family:Inter,Arial,sans-serif;">
+    ${pre}
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#0A0D10;padding:28px 12px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="640" cellspacing="0" cellpadding="0" style="max-width:640px;width:100%;background:#12161B;border:1px solid #232A32;border-radius:16px;overflow:hidden;">
+            <tr>
+              <td style="padding:28px 28px 18px 28px;background:linear-gradient(160deg,#12161B 40%,${headerTint} 100%);border-bottom:1px solid #232A32;">
+                <div style="font-family:'Space Grotesk',Inter,Arial,sans-serif;font-size:24px;font-weight:700;letter-spacing:-0.01em;color:#EAECEF;">AutoVault</div>
+                <div style="margin-top:10px;color:${badgeColor};font-size:12px;letter-spacing:0.12em;text-transform:uppercase;font-weight:700;">${badge}</div>
+                <h1 style="margin:14px 0 0 0;font-family:'Space Grotesk',Inter,Arial,sans-serif;font-size:28px;line-height:1.2;color:#EAECEF;">${title}</h1>
+                ${introHtml ? `<p style="margin:10px 0 0 0;color:#A5AFBC;font-size:15px;line-height:1.6;">${introHtml}</p>` : ""}
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:22px 28px 26px 28px;">
+                ${bodyHtml}
+                ${footer}
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </div>`;
+}
+
+function supportPriorityTheme(priority) {
+  const key = String(priority || "Normal");
+  if (key === "Urgent") {
+    return {
+      color: "#F07178",
+      pillBg: "#3A1A1C",
+      pillBorder: "#F07178",
+      headerTint: "#301417",
+      badge: "Urgent support",
+      pill: "Urgent — reply ASAP",
+    };
+  }
+  if (key === "Low") {
+    return {
+      color: "#A5AFBC",
+      pillBg: "#1A1F26",
+      pillBorder: "#3A424A",
+      headerTint: "#1A1F26",
+      badge: "Support request",
+      pill: "Low priority",
+    };
+  }
+  return {
+    color: "#46D392",
+    pillBg: "#173021",
+    pillBorder: "#2C9257",
+    headerTint: "#173021",
+    badge: "Support request",
+    pill: "Normal priority",
+  };
+}
+
+function supportPriorityPill(theme) {
+  return `<div style="display:inline-block;background:${theme.pillBg};border:1px solid ${theme.pillBorder};color:${theme.color};font-size:12px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;padding:7px 12px;border-radius:999px;margin-bottom:16px;">${theme.pill}</div>`;
+}
+
+function supportCtaButton(href, label) {
+  if (!href) return "";
+  return `
+    <table role="presentation" cellspacing="0" cellpadding="0" style="margin-top:18px;">
+      <tr>
+        <td style="border-radius:10px;background:#2C9257;">
+          <a href="${href}" style="display:inline-block;padding:12px 18px;color:#ffffff;text-decoration:none;font-size:14px;font-weight:700;">${label}</a>
+        </td>
+      </tr>
+    </table>`;
+}
+
 registerTemplate("contactInbound", ({
   fullName,
   email,
@@ -574,4 +667,129 @@ export function contactInboundEmail(data) {
 
 export function contactAutoReplyEmail(data) {
   return renderTemplate("contactAutoReply", data);
+}
+
+registerTemplate("supportInbound", ({
+  ticketId,
+  submittedAt,
+  dealership,
+  planLabel,
+  location,
+  dealershipPhone,
+  fromName,
+  fromRole,
+  fromEmail,
+  fromPhone,
+  topic,
+  subject,
+  priority,
+  messageHtml,
+}) => {
+  const theme = supportPriorityTheme(priority);
+  const rows = [
+    contactFieldRow("Ticket", ticketId, { accent: true }),
+    contactFieldRow("Submitted", submittedAt, { topBorder: true }),
+    contactFieldRow("Dealership", dealership, { topBorder: true }),
+    contactFieldRow("Plan", planLabel, { topBorder: true }),
+    contactFieldRow("Location", location, { topBorder: true }),
+    contactFieldRow("Dealership phone", dealershipPhone, { topBorder: true }),
+    contactFieldRow("From", fromName, { topBorder: true }),
+    contactFieldRow("Role", fromRole, { topBorder: true }),
+    contactFieldRow("Email", fromEmail, { topBorder: true, accent: true }),
+    contactFieldRow("Phone", fromPhone, { topBorder: true }),
+    contactFieldRow("Topic", topic, { topBorder: true }),
+    contactFieldRow("Priority", priority, { topBorder: true }),
+    contactFieldRow("Subject", subject, { topBorder: true }),
+  ].join("");
+
+  const bodyHtml = `
+    ${supportPriorityPill(theme)}
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#0F1419;border:1px solid #232A32;border-radius:12px;">
+      ${rows}
+      <tr>
+        <td style="padding:16px 16px 6px 16px;color:#8B95A1;font-size:12px;text-transform:uppercase;letter-spacing:0.08em;border-top:1px solid #232A32;">Message</td>
+      </tr>
+      <tr>
+        <td style="padding:0 16px 16px 16px;">
+          <div style="background:#0C1014;border:1px solid #232A32;border-left:3px solid ${theme.color};border-radius:11px;padding:14px 16px;color:#EAECEF;font-size:15px;line-height:1.65;">${messageHtml || "(no message)"}</div>
+        </td>
+      </tr>
+    </table>
+    <p style="margin:16px 0 0 0;color:#8B95A1;font-size:13px;line-height:1.6;">Reply to this email to reach <span style="color:#EAECEF;font-weight:700;">${fromName}</span> directly.</p>
+  `;
+
+  return wrapTransactionalEmail({
+    preheader: `${priority} · ${topic} · ${subject}`,
+    badge: theme.badge,
+    badgeColor: theme.color,
+    headerTint: theme.headerTint,
+    title: subject || "New support ticket",
+    introHtml: `<span style="color:#EAECEF;font-weight:700;">${fromName}</span> at <span style="color:#EAECEF;font-weight:700;">${dealership}</span> submitted a ${String(priority || "Normal").toLowerCase()} request.`,
+    bodyHtml,
+  });
+});
+
+registerTemplate("supportAutoReply", ({
+  firstName,
+  ticketId,
+  submittedAt,
+  dealership,
+  topic,
+  subject,
+  priority,
+  messageHtml,
+  supportEmail,
+  siteUrl,
+}) => {
+  const theme = supportPriorityTheme(priority);
+  const greeting = firstName ? `Hi ${firstName},` : "Hi,";
+  const rows = [
+    contactFieldRow("Ticket", ticketId, { accent: true }),
+    contactFieldRow("Submitted", submittedAt, { topBorder: true }),
+    contactFieldRow("Dealership", dealership, { topBorder: true }),
+    contactFieldRow("Topic", topic, { topBorder: true }),
+    contactFieldRow("Priority", priority, { topBorder: true }),
+    contactFieldRow("Subject", subject, { topBorder: true }),
+  ].join("");
+
+  const bodyHtml = `
+    <div style="display:inline-block;background:#173021;border:1px solid #2C9257;color:#46D392;font-size:13px;font-weight:700;padding:8px 12px;border-radius:999px;margin-bottom:16px;">Request received</div>
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#0F1419;border:1px solid #232A32;border-radius:12px;">
+      ${rows}
+      ${
+        messageHtml
+          ? `<tr>
+        <td style="padding:16px 16px 6px 16px;color:#8B95A1;font-size:12px;text-transform:uppercase;letter-spacing:0.08em;border-top:1px solid #232A32;">Your message</td>
+      </tr>
+      <tr>
+        <td style="padding:0 16px 16px 16px;">
+          <div style="background:#0C1014;border:1px solid #232A32;border-left:3px solid ${theme.color};border-radius:11px;padding:14px 16px;color:#EAECEF;font-size:15px;line-height:1.65;">${messageHtml}</div>
+        </td>
+      </tr>`
+          : ""
+      }
+    </table>
+    <p style="margin:16px 0 0 0;color:#8B95A1;font-size:13px;line-height:1.6;">Our team typically replies within one business day. Need to add anything? Reply to this email or write us at <a href="mailto:${supportEmail}" style="color:#46D392;text-decoration:none;font-weight:600;">${supportEmail}</a>.</p>
+    ${supportCtaButton(siteUrl, "Back to AutoVault")}
+    <p style="margin:18px 0 0 0;color:#5A636D;font-size:12px;line-height:1.6;">— The AutoVault team</p>
+  `;
+
+  return wrapTransactionalEmail({
+    preheader: `Ticket ${ticketId} received — ${subject}`,
+    badge: "Support confirmation",
+    badgeColor: "#46D392",
+    headerTint: "#173021",
+    title: "We got your request",
+    introHtml: `${greeting} ticket <span style="color:#EAECEF;font-weight:700;">${ticketId}</span> is in our queue.`,
+    bodyHtml,
+    footerHtml: "",
+  });
+});
+
+export function supportInboundEmail(data) {
+  return renderTemplate("supportInbound", data);
+}
+
+export function supportAutoReplyEmail(data) {
+  return renderTemplate("supportAutoReply", data);
 }

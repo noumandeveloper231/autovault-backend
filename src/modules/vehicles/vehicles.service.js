@@ -88,14 +88,26 @@ export async function listVehicles(dealershipId, query) {
   };
 }
 
-/**
- * Authoritative inventory vs total counts (+ cost rollups) for the Vehicles page.
- * Current inventory = unsold / not exited. Total = every non-deleted vehicle.
- */
-export async function getInventoryStats(dealershipId) {
-  const inventoryWhere = currentInventoryWhere(dealershipId);
-  const allWhere = allVehiclesWhere(dealershipId);
-  const soldWhere = {
+function calendarRange(year, month /* 1–12 or null for full year */) {
+  if (month == null) {
+    return {
+      start: new Date(year, 0, 1),
+      end: new Date(year + 1, 0, 1),
+    };
+  }
+  return {
+    start: new Date(year, month - 1, 1),
+    end: new Date(year, month, 1),
+  };
+}
+
+function thisMonthRange() {
+  const now = new Date();
+  return calendarRange(now.getFullYear(), now.getMonth() + 1);
+}
+
+function soldBaseWhere(dealershipId) {
+  return {
     dealershipId,
     deletedAt: null,
     OR: [
@@ -103,25 +115,118 @@ export async function getInventoryStats(dealershipId) {
       { soldAt: { not: null } },
     ],
   };
+}
 
-  const costSelect = {
-    _sum: {
-      acquisitionCost: true,
-      auctionFees: true,
-      reconditioningCost: true,
-      registrationFees: true,
-      flooringFees: true,
-      totalInvested: true,
-    },
+/** Sold vehicles whose soldAt (or deal.saleDate fallback) falls in [start, end). */
+function soldInRangeWhere(dealershipId, start, end) {
+  return {
+    dealershipId,
+    deletedAt: null,
+    OR: [
+      { soldAt: { gte: start, lt: end } },
+      {
+        soldAt: null,
+        status: { in: EXIT_INVENTORY_STATUSES },
+        deal: { saleDate: { gte: start, lt: end } },
+      },
+    ],
   };
+}
+
+const COST_SUM_SELECT = {
+  _sum: {
+    acquisitionCost: true,
+    auctionFees: true,
+    reconditioningCost: true,
+    registrationFees: true,
+    flooringFees: true,
+    totalInvested: true,
+    soldPrice: true,
+  },
+};
+
+function mapCosts(agg) {
+  return {
+    purchaseCost: moneySum(agg, "acquisitionCost"),
+    fees: moneySum(agg, "auctionFees"),
+    repairs: moneySum(agg, "reconditioningCost"),
+    registrationFees: moneySum(agg, "registrationFees"),
+    flooringFees: moneySum(agg, "flooringFees"),
+    totalInvested: moneySum(agg, "totalInvested"),
+  };
+}
+
+async function summarizeSoldInRange(dealershipId, start, end) {
+  const where = soldInRangeWhere(dealershipId, start, end);
+  const [count, costAgg, soldRows] = await Promise.all([
+    prisma.vehicle.count({ where }),
+    prisma.vehicle.aggregate({ where, ...COST_SUM_SELECT }),
+    prisma.vehicle.findMany({
+      where,
+      select: {
+        soldPrice: true,
+        totalInvested: true,
+        deal: {
+          select: {
+            salesTaxAmount: true,
+            commissionAmount: true,
+            netProfit: true,
+          },
+        },
+      },
+    }),
+  ]);
+
+  let salesTax = 0;
+  let commission = 0;
+  let profit = 0;
+  for (const row of soldRows) {
+    const deal = row.deal;
+    const soldPrice = toNum(row.soldPrice) ?? 0;
+    const invested = toNum(row.totalInvested) ?? 0;
+    const comm = toNum(deal?.commissionAmount) ?? 0;
+    salesTax += toNum(deal?.salesTaxAmount) ?? 0;
+    commission += comm;
+    if (deal?.netProfit != null) {
+      profit += toNum(deal.netProfit) ?? 0;
+    } else {
+      profit += soldPrice - invested - comm;
+    }
+  }
+
+  return {
+    soldCount: count,
+    soldValue: moneySum(costAgg, "soldPrice"),
+    profit: roundMoney(profit),
+    salesTax: roundMoney(salesTax),
+    commission: roundMoney(commission),
+    costs: mapCosts(costAgg),
+  };
+}
+
+/**
+ * Authoritative inventory vs total counts (+ cost rollups) for the Vehicles page.
+ * Current inventory = unsold / not exited. Total = every non-deleted vehicle.
+ * Optional year/month scopes Costs + sold-history KPIs without changing live lot stats.
+ */
+export async function getInventoryStats(dealershipId, query = {}) {
+  const mode = query.mode || "all";
+  const inventoryWhere = currentInventoryWhere(dealershipId);
+  const allWhere = allVehiclesWhere(dealershipId);
+  const soldWhere = soldBaseWhere(dealershipId);
+  const liveMonth = thisMonthRange();
+  const flooredCutoff = new Date();
+  flooredCutoff.setDate(flooredCutoff.getDate() - 30);
 
   const [
     currentInventoryCount,
     totalCount,
     soldCount,
     titlesPresentCount,
+    upcomingFlooredCount,
     inventoryCosts,
     allCosts,
+    soldThisMonth,
   ] = await Promise.all([
     prisma.vehicle.count({ where: inventoryWhere }),
     prisma.vehicle.count({ where: allWhere }),
@@ -129,34 +234,73 @@ export async function getInventoryStats(dealershipId) {
     prisma.vehicle.count({
       where: { ...inventoryWhere, titlePresent: true },
     }),
-    prisma.vehicle.aggregate({ where: inventoryWhere, ...costSelect }),
-    prisma.vehicle.aggregate({ where: allWhere, ...costSelect }),
+    prisma.vehicle.count({
+      where: {
+        ...inventoryWhere,
+        flooringStartDate: { not: null },
+        OR: [
+          { acquisitionDate: { lte: flooredCutoff } },
+          {
+            acquisitionDate: null,
+            flooringStartDate: { lte: flooredCutoff },
+          },
+        ],
+      },
+    }),
+    prisma.vehicle.aggregate({ where: inventoryWhere, ...COST_SUM_SELECT }),
+    prisma.vehicle.aggregate({ where: allWhere, ...COST_SUM_SELECT }),
+    summarizeSoldInRange(dealershipId, liveMonth.start, liveMonth.end),
   ]);
 
-  const mapCosts = (agg) => ({
-    purchaseCost: moneySum(agg, "acquisitionCost"),
-    fees: moneySum(agg, "auctionFees"),
-    repairs: moneySum(agg, "reconditioningCost"),
-    registrationFees: moneySum(agg, "registrationFees"),
-    flooringFees: moneySum(agg, "flooringFees"),
-    totalInvested: moneySum(agg, "totalInvested"),
-  });
-
-  return {
+  const liveCosts = mapCosts(inventoryCosts);
+  const payload = {
     currentInventoryCount,
     totalCount,
     soldCount,
     titlesPresentCount,
-    currentInventoryValue: mapCosts(inventoryCosts).totalInvested,
+    upcomingFlooredCount,
+    currentInventoryValue: liveCosts.totalInvested,
     costs: {
-      currentInventory: mapCosts(inventoryCosts),
+      currentInventory: liveCosts,
       allVehicles: mapCosts(allCosts),
     },
+    soldThisMonth: {
+      count: soldThisMonth.soldCount,
+      soldValue: soldThisMonth.soldValue,
+      profit: soldThisMonth.profit,
+    },
+    period: null,
     statuses: {
       active: ACTIVE_INVENTORY_STATUSES,
       exited: EXIT_INVENTORY_STATUSES,
     },
   };
+
+  if (mode === "year" || mode === "month") {
+    const year = query.year;
+    const month = mode === "month" ? query.month : null;
+    const range = calendarRange(year, month);
+    const periodSold = await summarizeSoldInRange(
+      dealershipId,
+      range.start,
+      range.end,
+    );
+    payload.period = {
+      mode,
+      year,
+      month: month ?? null,
+      soldCount: periodSold.soldCount,
+      soldValue: periodSold.soldValue,
+      profit: periodSold.profit,
+      costs: {
+        ...periodSold.costs,
+        salesTax: periodSold.salesTax,
+        commission: periodSold.commission,
+      },
+    };
+  }
+
+  return payload;
 }
 
 export async function getVehicle(dealershipId, vehicleId) {
@@ -274,6 +418,7 @@ const DEAL_SYNC_KEYS = [
   "commissionRate",
   "commissionType",
   "saleDate",
+  "salesRepId",
 ];
 
 export async function updateVehicle(
@@ -340,6 +485,7 @@ export async function updateVehicle(
       commissionAmount: true,
       commissionRate: true,
       commissionType: true,
+      salesRepId: true,
       rosNumber: true,
       notes: true,
       saleDate: true,
@@ -405,6 +551,21 @@ export async function updateVehicle(
     if (dealSync.saleDate !== undefined && dealSync.saleDate) {
       dealPatch.saleDate = dealSync.saleDate;
     }
+    if (dealSync.salesRepId !== undefined) {
+      const nextRepId = dealSync.salesRepId || null;
+      if (nextRepId) {
+        const repUser = await prisma.user.findFirst({
+          where: {
+            id: nextRepId,
+            dealershipId,
+            deletedAt: null,
+          },
+          select: { id: true },
+        });
+        if (!repUser) throw notFound("Sales rep not found.");
+      }
+      dealPatch.salesRepId = nextRepId;
+    }
 
     const nextSold =
       data.soldPrice !== undefined
@@ -456,6 +617,9 @@ export async function updateVehicle(
       if (data.notes !== undefined) jacketPatch.notes = data.notes || null;
       if (dealSync.saleDate !== undefined && dealSync.saleDate) {
         jacketPatch.dateSold = dealSync.saleDate;
+      }
+      if (dealSync.salesRepId !== undefined) {
+        jacketPatch.salesRepId = dealSync.salesRepId || null;
       }
       if (data.soldPrice !== undefined) {
         const invested = toDecimal(jacket.totalInvested);

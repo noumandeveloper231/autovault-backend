@@ -493,6 +493,7 @@ model Vehicle {
   @@index([dealershipId, vin])
   @@index([dealershipId, status, deletedAt])
   @@index([dealershipId, stockNumber])
+  @@index([dealershipId, soldAt])
   @@map("vehicles")
 }
 

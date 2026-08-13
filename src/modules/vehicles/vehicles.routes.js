@@ -23,6 +23,7 @@ import {
   updateFlooringPlanSchema,
   vehicleExpenseParams,
   flooringBreakdownQuerySchema,
+  inventoryStatsQuerySchema,
 } from "./vehicles.schema.js";
 import * as ctrl from "./vehicles.controller.js";
 
@@ -52,7 +53,11 @@ vehiclesRouter.get(
   asyncHandler(ctrl.listVehicles),
 );
 // Must be registered before /:id so "stats" is not parsed as a UUID.
-vehiclesRouter.get("/stats", asyncHandler(ctrl.getInventoryStats));
+vehiclesRouter.get(
+  "/stats",
+  validateQuery(inventoryStatsQuerySchema),
+  asyncHandler(ctrl.getInventoryStats),
+);
 vehiclesRouter.get(
   "/:id",
   validateParams(uuidParam),

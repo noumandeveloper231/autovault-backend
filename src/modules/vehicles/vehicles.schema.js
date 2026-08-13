@@ -95,6 +95,7 @@ export const updateVehicleSchema = createVehicleSchema
     commissionRate: z.coerce.number().min(0).optional().nullable(),
     commissionType: z.enum(["percentage", "manual", "flat"]).optional().nullable(),
     saleDate: z.coerce.date().optional().nullable(),
+    salesRepId: z.string().uuid().optional().nullable(),
   })
   .refine((d) => Object.keys(d).length > 0, { message: "No fields to update" });
 
@@ -159,3 +160,27 @@ export const vehicleExpenseParams = z.object({
 export const flooringBreakdownQuerySchema = z.object({
   asOfDate: z.coerce.date().optional(),
 });
+
+export const inventoryStatsQuerySchema = z
+  .object({
+    mode: z.enum(["all", "year", "month"]).optional().default("all"),
+    year: z.coerce.number().int().min(1990).max(2100).optional(),
+    /** Calendar month 1–12. Required when mode is `month`. */
+    month: z.coerce.number().int().min(1).max(12).optional(),
+  })
+  .superRefine((data, ctx) => {
+    if ((data.mode === "year" || data.mode === "month") && data.year == null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "year is required when mode is year or month",
+        path: ["year"],
+      });
+    }
+    if (data.mode === "month" && data.month == null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "month (1–12) is required when mode is month",
+        path: ["month"],
+      });
+    }
+  });

@@ -21,7 +21,10 @@ export async function listVehicles(req, res) {
 }
 
 export async function getInventoryStats(req, res) {
-  const stats = await vehiclesService.getInventoryStats(dealershipId(req));
+  const stats = await vehiclesService.getInventoryStats(
+    dealershipId(req),
+    req.query,
+  );
   return res.json({ stats });
 }
 

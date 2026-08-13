@@ -9,8 +9,9 @@ export async function createSupportMessage(req, res) {
   const message = await supportService.createSupportMessage({
     dealershipId: req.auth.dealershipId,
     userId: req.auth.userId,
-    name: req.auth.name,
+    name: req.body.name || req.auth.name,
     role: req.auth.role,
+    email: req.auth.email,
     topic: req.body.topic,
     subject: req.body.subject,
     priority: req.body.priority,
