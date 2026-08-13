@@ -725,16 +725,25 @@ export async function changeVehicleStatus(
   ipAddress,
 ) {
   const existing = await findVehicleRecord(dealershipId, vehicleId);
-  if (existing.status === status) {
-    return serializeVehicle(existing);
-  }
-
   const exitStatuses = new Set([
     "sold",
     "loss",
     "wholesale",
     "out_of_state_sale",
   ]);
+  const activeStatuses = new Set([
+    "in_stock",
+    "needs_attention",
+    "pending_deal",
+    "arbitration",
+  ]);
+  const returningToInventory = activeStatuses.has(status);
+  if (
+    existing.status === status &&
+    !(returningToInventory && existing.soldAt)
+  ) {
+    return serializeVehicle(existing);
+  }
   const [updated] = await prisma.$transaction([
     prisma.vehicle.update({
       where: { id: vehicleId },
@@ -742,11 +751,14 @@ export async function changeVehicleStatus(
         status,
         soldAt: exitStatuses.has(status)
           ? existing.soldAt || new Date()
-          : existing.soldAt,
+          : returningToInventory
+            ? null
+            : existing.soldAt,
+        soldPrice: returningToInventory ? null : existing.soldPrice,
         isWholesale:
           status === "wholesale"
             ? true
-            : existing.status === "wholesale"
+            : returningToInventory
               ? false
               : existing.isWholesale,
       },
