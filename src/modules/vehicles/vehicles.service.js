@@ -268,6 +268,8 @@ export async function getInventoryStats(dealershipId, query = {}) {
       count: soldThisMonth.soldCount,
       soldValue: soldThisMonth.soldValue,
       profit: soldThisMonth.profit,
+      salesTax: soldThisMonth.salesTax,
+      commission: soldThisMonth.commission,
     },
     period: null,
     statuses: {
