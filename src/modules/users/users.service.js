@@ -127,9 +127,9 @@ async function sendInvitationEmail({
       eyebrow: isCpa ? "CPA Portal Invitation" : "Team Invitation",
       accent: isCpa ? "#2DD47F" : "#46D392",
       bodyHtml: isCpa
-        ? `You've been invited as a <strong style="color:#EAECEF;">CPA / Accountant</strong>${
+        ? `You've been invited as a <strong style="color:#0B0B14;">CPA / Accountant</strong>${
             dealership?.name
-              ? ` for <span style="color:#EAECEF;font-weight:700;">${dealership.name}</span>`
+              ? ` for <span style="color:#0B0B14;font-weight:700;">${dealership.name}</span>`
               : ""
           }. You'll get a read-only portal to review P&amp;L, expenses, and tax numbers — without editing inventory or deals.`
         : undefined,

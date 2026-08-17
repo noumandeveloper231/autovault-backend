@@ -79,39 +79,15 @@ export async function submitContact(payload, ip) {
   const siteUrl = publicSiteUrl();
   const escapedMessage = message ? escapeHtml(message) : "";
 
-  const inboundData = {
+  const contactData = {
     firstName: escapeHtml(first),
     fullName: escapeHtml(fullName),
     email: escapeHtml(email),
     company: company ? escapeHtml(company) : "",
     phone: phone ? escapeHtml(phone) : "",
     state: state ? escapeHtml(state) : "",
-    message: escapedMessage,
     submittedAt: escapeHtml(formatSubmittedAt()),
-    supportEmail: escapeHtml(to),
-    siteUrl,
-  };
-
-  const confirmationDetails = [
-    phone ? `<b>Mobile:</b> ${escapeHtml(phone)}` : null,
-    state ? `<b>State:</b> ${escapeHtml(state)}` : null,
-    phone || state ? "" : null,
-    toEmailParagraph(escapedMessage),
-  ]
-    .filter((line) => line !== null)
-    .join("<br>");
-
-  const confirmationData = {
-    firstName: escapeHtml(first),
-    ticketId: "AV-CONTACT",
-    submittedAt: escapeHtml(formatSubmittedAt()),
-    dealership: company ? escapeHtml(company) : "—",
-    topic: "Website contact",
-    subject: escapedMessage
-      ? escapeHtml(message.length > 80 ? `${message.slice(0, 77)}…` : message)
-      : "Contact form",
-    priority: "Normal",
-    messageHtml: confirmationDetails,
+    messageHtml: toEmailParagraph(escapedMessage),
     supportEmail: escapeHtml(to),
     siteUrl,
   };
@@ -121,7 +97,7 @@ export async function submitContact(payload, ip) {
       await sendEmail({
         to,
         subject: `AutoVault Contact — ${fullName}`,
-        html: contactInboundEmail(inboundData),
+        html: contactInboundEmail(contactData),
         replyTo: { email, name: fullName },
       });
     } catch (err) {
@@ -134,7 +110,7 @@ export async function submitContact(payload, ip) {
     await sendEmail({
       to: { email, name: fullName },
       subject: "We got your message — AutoVault",
-      html: contactAutoReplyEmail(confirmationData),
+      html: contactAutoReplyEmail(contactData),
       replyTo: { email: to, name: "AutoVault" },
     });
   } catch (err) {

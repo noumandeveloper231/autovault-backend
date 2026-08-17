@@ -62,7 +62,7 @@ function formatSubmittedAt(date) {
 function mailtoHtml(email) {
   const safe = String(email || "").trim();
   if (!safe || /[<>"'\\\s]/.test(safe)) return escapeHtml(safe);
-  return `<a href="mailto:${safe}" style="color:#46D392;text-decoration:none;font-weight:600;">${escapeHtml(safe)}</a>`;
+  return `<a href="mailto:${safe}" style="color:#2743E8;text-decoration:none;font-weight:600;">${escapeHtml(safe)}</a>`;
 }
 
 function serializeSupportMessage(row) {

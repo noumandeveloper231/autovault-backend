@@ -1,7 +1,7 @@
 import { prisma } from "../lib/prisma.js";
 import { enqueueJob } from "../lib/redis.js";
-import { sendEmail } from "../utils/email.js";
-import { env } from "../config/env.js";
+import { sendEmail, publicSiteUrl } from "../utils/email.js";
+import { taxReminderEmail } from "../utils/email-templates.js";
 import { logger } from "../common/logger.js";
 
 function daysUntil(date) {
@@ -39,27 +39,6 @@ async function getUpcomingRemindersForDealership(dealership) {
     .filter((r) => r.daysUntilDue <= reminderDays);
 }
 
-function buildReminderEmailHtml({ ownerName, dealershipName, reminders }) {
-  const rows = reminders
-    .map(
-      (r) =>
-        `<tr><td>${r.periodName}</td><td>${new Date(r.dueDate).toLocaleDateString()}</td><td>${r.daysUntilDue}</td><td>${r.vehicleCount}</td></tr>`,
-    )
-    .join("");
-
-  const dashboardUrl = `${env.FRONTEND_URL.replace(/\/+$/, "")}/dashboard/state-tax`;
-
-  return `
-    <p>Hi ${ownerName},</p>
-    <p>The following sales tax filing periods for <strong>${dealershipName}</strong> are due soon:</p>
-    <table border="1" cellpadding="8" cellspacing="0">
-      <thead><tr><th>Period</th><th>Due Date</th><th>Days Left</th><th>Vehicles</th></tr></thead>
-      <tbody>${rows}</tbody>
-    </table>
-    <p><a href="${dashboardUrl}">Open State Tax dashboard</a></p>
-  `;
-}
-
 async function findRecipient(dealershipId) {
   return prisma.user.findFirst({
     where: {
@@ -79,16 +58,17 @@ async function sendReminderEmail(dealership, reminders) {
     return { sent: false, error: "No owner/manager email found" };
   }
 
-  const html = buildReminderEmailHtml({
+  const html = taxReminderEmail({
     ownerName: recipient.fullName ?? "Dealer",
     dealershipName: dealership.name,
     reminders,
+    dashboardUrl: `${publicSiteUrl()}/dashboard/state-tax`,
   });
 
   const enqueued = await enqueueJob("email", {
     type: "tax_reminder",
     to: recipient.email,
-    subject: `Sales Tax Filing Reminder — ${dealership.name}`,
+    subject: `Sales Tax Filing Reminder - ${dealership.name}`,
     html,
     dealershipId: dealership.id,
   });
@@ -100,7 +80,7 @@ async function sendReminderEmail(dealership, reminders) {
   try {
     await sendEmail({
       to: recipient.email,
-      subject: `Sales Tax Filing Reminder — ${dealership.name}`,
+      subject: `Sales Tax Filing Reminder - ${dealership.name}`,
       html,
     });
     return { sent: true, method: "direct" };

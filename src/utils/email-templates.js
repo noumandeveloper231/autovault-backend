@@ -5,80 +5,53 @@ import { dirname, join } from "node:path";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const emailsDir = join(__dirname, "..", "emails");
 
-const welcomeEmailHtml = readFileSync(
-  join(emailsDir, "subscription-welcome.html"),
-  "utf8",
-);
-const supportAutoReplyHtml = readFileSync(
-  join(emailsDir, "support-auto-reply.html"),
-  "utf8",
-);
-
-function fillSupportConfirmation({
-  firstName,
-  ticketId,
-  submittedAt,
-  dealership,
-  topic,
-  subject,
-  priority,
-  messageHtml,
-  supportEmail,
-  siteUrl,
-  preheader,
-  eyebrow,
-  headline,
-  introHtml,
-  pill,
-  noteHtml,
-  ctaUrl,
-  ctaLabel,
-  messageLabel,
-  footerNote,
-}) {
-  const name = firstName || "there";
-  const ticket = ticketId || "AV-TICKET";
-  const support = supportEmail || "support@autovault360.com";
-  const site = siteUrl || "https://www.autovault360.com";
-
-  return supportAutoReplyHtml
-    .replaceAll("{{firstName}}", name)
-    .replaceAll("{{ticketId}}", ticket)
-    .replaceAll("{{submittedAt}}", submittedAt || "")
-    .replaceAll("{{dealership}}", dealership || "—")
-    .replaceAll("{{topic}}", topic || "General")
-    .replaceAll("{{priority}}", priority || "Normal")
-    .replaceAll("{{subject}}", subject || "")
-    .replaceAll("{{messageHtml}}", messageHtml || "")
-    .replaceAll("{{supportEmail}}", support)
-    .replaceAll("{{siteUrl}}", site)
-    .replaceAll(
-      "{{preheader}}",
-      preheader ||
-        `We got your request — ticket ${ticket} is in our queue. Our team typically replies within one business day.`,
-    )
-    .replaceAll("{{eyebrow}}", eyebrow || "Support Confirmation")
-    .replaceAll("{{headline}}", headline || "We got your request")
-    .replaceAll(
-      "{{introHtml}}",
-      introHtml ||
-        `Hi ${name}, ticket <b class="av-accent" style="color:#2743E8;">${ticket}</b> is in our queue.`,
-    )
-    .replaceAll("{{pill}}", pill || "Request received")
-    .replaceAll(
-      "{{noteHtml}}",
-      noteHtml ||
-        `Our team typically replies within one business day. Need to add anything? Reply to this email or write us at <a href="mailto:${support}" class="av-accent" style="color:#2743E8;text-decoration:none;font-weight:bold;">${support}</a>.`,
-    )
-    .replaceAll("{{ctaUrl}}", ctaUrl || site)
-    .replaceAll("{{ctaLabel}}", ctaLabel || "Back to AutoVault")
-    .replaceAll("{{messageLabel}}", messageLabel || "Your message")
-    .replaceAll(
-      "{{footerNote}}",
-      footerNote ||
-        "You&rsquo;re receiving this email because you contacted AutoVault support. &copy; 2026 AutoVault.",
-    );
+function loadEmail(name) {
+  return readFileSync(join(emailsDir, name), "utf8");
 }
+
+function fill(html, vars) {
+  let out = html;
+  for (const [key, value] of Object.entries(vars)) {
+    out = out.replaceAll(`{{${key}}}`, value == null ? "" : String(value));
+  }
+  return out;
+}
+
+function escapeHtml(str) {
+  return String(str || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
+function dash(value) {
+  const text = String(value || "").trim();
+  return text || "—";
+}
+
+function wrapBranded({ title, preheader, body, footerNote }) {
+  return fill(shellHtml, {
+    title: title || "AutoVault",
+    preheader: preheader || "",
+    body: body || "",
+    footerNote:
+      footerNote ||
+      "You&rsquo;re receiving this email from AutoVault. &copy; 2026 AutoVault.",
+  });
+}
+
+const shellHtml = loadEmail("email-shell.html");
+const welcomeHtml = loadEmail("subscription-welcome.html");
+const supportAutoReplyHtml = loadEmail("support-auto-reply.html");
+const supportInboundBody = loadEmail("support-inbound.html");
+const contactInboundHtml = loadEmail("contact-inbound.html");
+const contactAutoReplyHtml = loadEmail("contact-auto-reply.html");
+const userInvitationBody = loadEmail("user-invitation.html");
+const salesRepWelcomeBody = loadEmail("sales-rep-welcome.html");
+const resetPasswordBody = loadEmail("reset-password.html");
+const billingNoticeBody = loadEmail("billing-notice.html");
+const taxReminderBody = loadEmail("tax-reminder.html");
 
 const templates = {};
 
@@ -92,7 +65,11 @@ export function getTemplate(name) {
 
 export function renderTemplate(name, data) {
   const fn = templates[name];
-  if (!fn) throw new Error(`Email template "${name}" not found. Available: ${Object.keys(templates).join(", ")}`);
+  if (!fn) {
+    throw new Error(
+      `Email template "${name}" not found. Available: ${Object.keys(templates).join(", ")}`,
+    );
+  }
   return fn(data);
 }
 
@@ -101,9 +78,10 @@ export function listTemplates() {
 }
 
 registerTemplate("subscriptionWelcome", ({ loginEmail, temporaryPassword }) =>
-  welcomeEmailHtml
-    .replaceAll("{{email}}", loginEmail)
-    .replaceAll("{{tempPassword}}", temporaryPassword),
+  fill(welcomeHtml, {
+    email: loginEmail,
+    tempPassword: temporaryPassword,
+  }),
 );
 
 registerTemplate("userInvitation", ({
@@ -113,181 +91,142 @@ registerTemplate("userInvitation", ({
   dealership,
   acceptUrl,
   eyebrow,
-  accent,
   bodyHtml,
 }) => {
   const label =
-    roleLabel ||
-    String(role || "team member").replace(/_/g, " ");
-  const badge = eyebrow || "Team Invitation";
-  const accentColor = accent || "#46D392";
-  const greeting = name ? `Hi ${name},` : "You've been invited.";
+    roleLabel || String(role || "team member").replace(/_/g, " ");
+  const greeting = name ? `Hi ${name},` : "You&rsquo;ve been invited.";
   const dealershipBit = dealership
-    ? ` for <span style="color:#EAECEF;font-weight:700;">${dealership}</span>`
+    ? ` for <b class="av-text" style="color:#0B0B14;">${dealership}</b>`
     : "";
-  const defaultBody = `You have been invited to join AutoVault as <strong style="color:#EAECEF;">${label}</strong>${dealershipBit}. Accept below to set your password and activate your login.`;
-  return `
-  <div style="margin:0;padding:0;background:#0A0D10;color:#EAECEF;font-family:Inter,Arial,sans-serif;">
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#0A0D10;padding:28px 12px;">
-      <tr>
-        <td align="center">
-          <table role="presentation" width="640" cellspacing="0" cellpadding="0" style="max-width:640px;width:100%;background:#12161B;border:1px solid #232A32;border-radius:16px;overflow:hidden;">
-            <tr>
-              <td style="padding:28px 28px 18px 28px;background:linear-gradient(160deg,#12161B 40%,#173021 100%);border-bottom:1px solid #232A32;">
-                <div style="font-family:'Space Grotesk',Inter,Arial,sans-serif;font-size:24px;font-weight:700;letter-spacing:-0.01em;color:#EAECEF;">AutoVault</div>
-                <div style="margin-top:10px;color:${accentColor};font-size:12px;letter-spacing:0.12em;text-transform:uppercase;font-weight:700;">${badge}</div>
-                <h1 style="margin:14px 0 0 0;font-family:'Space Grotesk',Inter,Arial,sans-serif;font-size:28px;line-height:1.15;color:#EAECEF;">${greeting}</h1>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:22px 28px 26px 28px;">
-                <p style="margin:0 0 12px 0;color:#A5AFBC;font-size:15px;line-height:1.6;">${bodyHtml || defaultBody}</p>
+  const defaultBody = `You have been invited to join AutoVault as <b class="av-text" style="color:#0B0B14;">${label}</b>${dealershipBit}. Accept below to set your password and activate your login.`;
+  const dealershipBlock = dealership
+    ? `<tr><td style="padding:16px 18px 6px 18px;color:#8A8CA0;font-family:Arial,Helvetica,sans-serif;font-size:12px;font-weight:bold;letter-spacing:0.06em;text-transform:uppercase;border-top:1px solid #E7E9F1;" class="av-faint av-line">Dealership</td></tr>
+          <tr><td style="padding:0 18px 18px 18px;color:#0B0B14;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:bold;line-height:1.45;" class="av-text">${dealership}</td></tr>`
+    : "";
 
-                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#0F1419;border:1px solid #232A32;border-radius:12px;margin-top:6px;">
-                  <tr>
-                    <td style="padding:16px 16px 6px 16px;color:#8B95A1;font-size:12px;text-transform:uppercase;letter-spacing:0.08em;">Role</td>
-                  </tr>
-                  <tr>
-                    <td style="padding:0 16px 14px 16px;color:${accentColor};font-size:16px;font-weight:700;">${label}</td>
-                  </tr>
-                  ${
-                    dealership
-                      ? `<tr>
-                    <td style="padding:16px 16px 6px 16px;color:#8B95A1;font-size:12px;text-transform:uppercase;letter-spacing:0.08em;border-top:1px solid #232A32;">Dealership</td>
-                  </tr>
-                  <tr>
-                    <td style="padding:0 16px 16px 16px;color:#EAECEF;font-size:16px;font-weight:600;">${dealership}</td>
-                  </tr>`
-                      : ""
-                  }
-                </table>
-
-                <table role="presentation" cellspacing="0" cellpadding="0" style="margin-top:18px;">
-                  <tr>
-                    <td style="border-radius:10px;background:#2C9257;">
-                      <a href="${acceptUrl}" style="display:inline-block;padding:12px 18px;color:#ffffff;text-decoration:none;font-size:14px;font-weight:700;">Accept Invitation</a>
-                    </td>
-                  </tr>
-                </table>
-
-                <p style="margin:18px 0 0 0;color:#8B95A1;font-size:13px;line-height:1.6;">This link expires in 7 days. If you were not expecting this invite, you can ignore this email.</p>
-              </td>
-            </tr>
-          </table>
-        </td>
-      </tr>
-    </table>
-  </div>
-`;
+  return wrapBranded({
+    title: greeting.replace(/<[^>]+>/g, ""),
+    preheader: `You're invited to join AutoVault as ${label}.`,
+    footerNote:
+      "You&rsquo;re receiving this email because you were invited to AutoVault. &copy; 2026 AutoVault.",
+    body: fill(userInvitationBody, {
+      eyebrow: eyebrow || "Team Invitation",
+      greeting,
+      introHtml: bodyHtml || defaultBody,
+      roleLabel: label,
+      dealershipBlock,
+      acceptUrl,
+    }),
+  });
 });
 
-registerTemplate("taxReminder", ({ ownerName, dealershipName, rows, dashboardUrl }) => `
-  <div style="margin:0;padding:0;background:#0A0D10;color:#EAECEF;font-family:Inter,Arial,sans-serif;">
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#0A0D10;padding:28px 12px;">
-      <tr>
-        <td align="center">
-          <table role="presentation" width="640" cellspacing="0" cellpadding="0" style="max-width:640px;width:100%;background:#12161B;border:1px solid #232A32;border-radius:16px;overflow:hidden;">
-            <tr>
-              <td style="padding:28px 28px 18px 28px;background:linear-gradient(160deg,#12161B 40%,#173021 100%);border-bottom:1px solid #232A32;">
-                <div style="font-family:'Space Grotesk',Inter,Arial,sans-serif;font-size:24px;font-weight:700;letter-spacing:-0.01em;color:#EAECEF;">AutoVault</div>
-                <div style="margin-top:10px;color:#F5A623;font-size:12px;letter-spacing:0.12em;text-transform:uppercase;font-weight:700;">Tax Reminder</div>
-                <h1 style="margin:14px 0 0 0;font-family:'Space Grotesk',Inter,Arial,sans-serif;font-size:28px;line-height:1.15;color:#EAECEF;">Filing periods due soon</h1>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:22px 28px 26px 28px;">
-                <p style="margin:0 0 16px 0;color:#A5AFBC;font-size:15px;line-height:1.6;">Hi ${ownerName}, the following sales tax filing periods for <strong style="color:#EAECEF;">${dealershipName}</strong> are due soon:</p>
+function taxPeriodRows(reminders = []) {
+  return reminders
+    .map((row, index) => {
+      const border = index
+        ? "border-top:1px solid #E7E9F1;"
+        : "border-top:1px solid #DEE4FB;";
+      const due = row.dueDate
+        ? new Date(row.dueDate).toLocaleDateString("en-US", {
+            month: "short",
+            day: "numeric",
+            year: "numeric",
+          })
+        : "—";
+      return `<tr>
+            <td style="padding:12px 14px;${border}font-family:Arial,Helvetica,sans-serif;font-size:14px;font-weight:bold;color:#0B0B14;" class="av-text">${escapeHtml(dash(row.periodName))}</td>
+            <td style="padding:12px 14px;${border}font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#0B0B14;" class="av-text">${escapeHtml(due)}</td>
+            <td style="padding:12px 14px;${border}font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#0B0B14;" class="av-text">${escapeHtml(row.daysUntilDue ?? "—")}</td>
+            <td style="padding:12px 14px;${border}font-family:Arial,Helvetica,sans-serif;font-size:14px;color:#0B0B14;" class="av-text">${escapeHtml(row.vehicleCount ?? "—")}</td>
+          </tr>`;
+    })
+    .join("");
+}
 
-                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#0F1419;border:1px solid #232A32;border-radius:12px;overflow:hidden;">
-                  <tr style="background:#171C22;">
-                    <td style="padding:10px 14px;color:#8B95A1;font-size:12px;text-transform:uppercase;letter-spacing:0.08em;font-weight:700;border-bottom:1px solid #232A32;">Period</td>
-                    <td style="padding:10px 14px;color:#8B95A1;font-size:12px;text-transform:uppercase;letter-spacing:0.08em;font-weight:700;border-bottom:1px solid #232A32;">Due Date</td>
-                    <td style="padding:10px 14px;color:#8B95A1;font-size:12px;text-transform:uppercase;letter-spacing:0.08em;font-weight:700;border-bottom:1px solid #232A32;">Days Left</td>
-                    <td style="padding:10px 14px;color:#8B95A1;font-size:12px;text-transform:uppercase;letter-spacing:0.08em;font-weight:700;border-bottom:1px solid #232A32;">Vehicles</td>
-                  </tr>
-                  ${rows}
-                </table>
+registerTemplate("taxReminder", ({
+  ownerName,
+  dealershipName,
+  rows,
+  reminders,
+  dashboardUrl,
+}) =>
+  wrapBranded({
+    title: "Filing periods due soon",
+    preheader: `Sales tax filing periods for ${dealershipName || "your dealership"} are due soon.`,
+    footerNote:
+      "You&rsquo;re receiving this email because you manage tax filings in AutoVault. &copy; 2026 AutoVault.",
+    body: fill(taxReminderBody, {
+      ownerName: ownerName || "there",
+      dealershipName: dash(dealershipName),
+      rows: rows || taxPeriodRows(reminders),
+      dashboardUrl,
+    }),
+  }),
+);
 
-                <table role="presentation" cellspacing="0" cellpadding="0" style="margin-top:18px;">
-                  <tr>
-                    <td style="border-radius:10px;background:#2C9257;">
-                      <a href="${dashboardUrl}" style="display:inline-block;padding:12px 18px;color:#ffffff;text-decoration:none;font-size:14px;font-weight:700;">Open State Tax Dashboard</a>
-                    </td>
-                  </tr>
-                </table>
-              </td>
-            </tr>
-          </table>
-        </td>
-      </tr>
-    </table>
-  </div>
-`);
+registerTemplate("salesRepWelcome", ({
+  name,
+  username,
+  loginEmail,
+  temporaryPassword,
+  dealership,
+  loginUrl,
+}) =>
+  wrapBranded({
+    title: `Welcome, ${name || "there"}.`,
+    preheader: `You've been added as a Sales Rep${dealership ? ` for ${dealership}` : ""}.`,
+    footerNote:
+      "You&rsquo;re receiving this email because you were added as a Sales Rep in AutoVault. &copy; 2026 AutoVault.",
+    body: fill(salesRepWelcomeBody, {
+      name: name || "there",
+      username: dash(username),
+      loginEmail: dash(loginEmail),
+      temporaryPassword: dash(temporaryPassword),
+      dealership: dash(dealership),
+      loginUrl,
+    }),
+  }),
+);
 
-registerTemplate("salesRepWelcome", ({ name, username, loginEmail, temporaryPassword, dealership, loginUrl }) => `
-  <div style="margin:0;padding:0;background:#0A0D10;color:#EAECEF;font-family:Inter,Arial,sans-serif;">
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#0A0D10;padding:28px 12px;">
-      <tr>
-        <td align="center">
-          <table role="presentation" width="640" cellspacing="0" cellpadding="0" style="max-width:640px;width:100%;background:#12161B;border:1px solid #232A32;border-radius:16px;overflow:hidden;">
-            <tr>
-              <td style="padding:28px 28px 18px 28px;background:linear-gradient(160deg,#12161B 40%,#1A1430 100%);border-bottom:1px solid #232A32;">
-                <div style="font-family:'Space Grotesk',Inter,Arial,sans-serif;font-size:24px;font-weight:700;letter-spacing:-0.01em;color:#EAECEF;">AutoVault</div>
-                <div style="margin-top:10px;color:#A78BFA;font-size:12px;letter-spacing:0.12em;text-transform:uppercase;font-weight:700;">Sales Rep Invitation</div>
-                <h1 style="margin:14px 0 0 0;font-family:'Space Grotesk',Inter,Arial,sans-serif;font-size:30px;line-height:1.15;color:#EAECEF;">Welcome, ${name}.</h1>
-                <p style="margin:10px 0 0 0;color:#A5AFBC;font-size:15px;line-height:1.6;">You've been added as a <span style="color:#C4B5FD;font-weight:700;">Sales Rep</span> for <span style="color:#EAECEF;font-weight:700;">${dealership}</span>.</p>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:22px 28px 26px 28px;">
-                <p style="margin:0 0 16px 0;color:#A5AFBC;font-size:14px;line-height:1.6;">Use the credentials below to log in and start managing your deals.</p>
+function billingEmail({
+  title,
+  preheader,
+  eyebrow,
+  headline,
+  introHtml,
+  noteHtml,
+  footerNote,
+  name,
+  dealership,
+  planLabel,
+  amount,
+  dueDate,
+  dashboardUrl,
+}) {
+  const formattedAmount =
+    typeof amount === "number" || (amount && !Number.isNaN(Number(amount)))
+      ? `$${Number(amount).toFixed(2)}`
+      : dash(amount);
 
-                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#0F1419;border:1px solid #232A32;border-radius:12px;">
-                  <tr>
-                    <td style="padding:16px 16px 6px 16px;color:#8B95A1;font-size:12px;text-transform:uppercase;letter-spacing:0.08em;">Portal URL</td>
-                  </tr>
-                  <tr>
-                    <td style="padding:0 16px 14px 16px;color:#A78BFA;font-size:14px;font-weight:500;">${loginUrl}</td>
-                  </tr>
-                  <tr>
-                    <td style="padding:16px 16px 6px 16px;color:#8B95A1;font-size:12px;text-transform:uppercase;letter-spacing:0.08em;border-top:1px solid #232A32;">Username</td>
-                  </tr>
-                  <tr>
-                    <td style="padding:0 16px 14px 16px;color:#EAECEF;font-size:16px;font-weight:600;">${username}</td>
-                  </tr>
-                  <tr>
-                    <td style="padding:16px 16px 6px 16px;color:#8B95A1;font-size:12px;text-transform:uppercase;letter-spacing:0.08em;border-top:1px solid #232A32;">Login Email</td>
-                  </tr>
-                  <tr>
-                    <td style="padding:0 16px 14px 16px;color:#EAECEF;font-size:16px;font-weight:600;">${loginEmail}</td>
-                  </tr>
-                  <tr>
-                    <td style="padding:16px 16px 6px 16px;color:#8B95A1;font-size:12px;text-transform:uppercase;letter-spacing:0.08em;border-top:1px solid #232A32;">Temporary Password</td>
-                  </tr>
-                  <tr>
-                    <td style="padding:0 16px 16px 16px;">
-                      <div style="display:inline-block;background:#171C22;border:1px dashed #8B5CF6;color:#C4B5FD;padding:10px 14px;border-radius:10px;font-family:'JetBrains Mono',Consolas,monospace;font-size:16px;font-weight:700;">${temporaryPassword}</div>
-                    </td>
-                  </tr>
-                </table>
-
-                <p style="margin:16px 0 0 0;color:#8B95A1;font-size:13px;line-height:1.6;">For security, please change your password after your first login.</p>
-
-                <table role="presentation" cellspacing="0" cellpadding="0" style="margin-top:18px;">
-                  <tr>
-                    <td style="border-radius:10px;background:#8B5CF6;">
-                      <a href="${loginUrl}" style="display:inline-block;padding:12px 24px;color:#ffffff;text-decoration:none;font-size:14px;font-weight:700;">Open AutoVault Login</a>
-                    </td>
-                  </tr>
-                </table>
-              </td>
-            </tr>
-          </table>
-        </td>
-      </tr>
-    </table>
-  </div>
-`);
+  return wrapBranded({
+    title,
+    preheader,
+    footerNote,
+    body: fill(billingNoticeBody, {
+      eyebrow,
+      headline,
+      introHtml:
+        introHtml ||
+        `Hi ${name || "there"}, this is a billing update for <b class="av-text" style="color:#0B0B14;">${dash(dealership)}</b>.`,
+      noteHtml,
+      planLabel: dash(planLabel),
+      amount: formattedAmount,
+      dueDate: dash(dueDate),
+      dashboardUrl,
+    }),
+  });
+}
 
 registerTemplate("billingUpcomingReminder", ({
   name,
@@ -296,60 +235,25 @@ registerTemplate("billingUpcomingReminder", ({
   amount,
   dueDate,
   dashboardUrl,
-}) => `
-  <div style="margin:0;padding:0;background:#0A0D10;color:#EAECEF;font-family:Inter,Arial,sans-serif;">
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#0A0D10;padding:28px 12px;">
-      <tr>
-        <td align="center">
-          <table role="presentation" width="640" cellspacing="0" cellpadding="0" style="max-width:640px;width:100%;background:#12161B;border:1px solid #232A32;border-radius:16px;overflow:hidden;">
-            <tr>
-              <td style="padding:28px 28px 18px 28px;background:linear-gradient(160deg,#12161B 40%,#173021 100%);border-bottom:1px solid #232A32;">
-                <div style="font-family:'Space Grotesk',Inter,Arial,sans-serif;font-size:24px;font-weight:700;letter-spacing:-0.01em;color:#EAECEF;">AutoVault</div>
-                <div style="margin-top:10px;color:#F5A623;font-size:12px;letter-spacing:0.12em;text-transform:uppercase;font-weight:700;">Billing Reminder</div>
-                <h1 style="margin:14px 0 0 0;font-family:'Space Grotesk',Inter,Arial,sans-serif;font-size:28px;line-height:1.15;color:#EAECEF;">Your plan renews in 3 days</h1>
-                <p style="margin:10px 0 0 0;color:#A5AFBC;font-size:15px;line-height:1.6;">Hi ${name}, this is a heads-up for <span style="color:#EAECEF;font-weight:700;">${dealership}</span>.</p>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:22px 28px 26px 28px;">
-                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#0F1419;border:1px solid #232A32;border-radius:12px;">
-                  <tr>
-                    <td style="padding:16px 16px 6px 16px;color:#8B95A1;font-size:12px;text-transform:uppercase;letter-spacing:0.08em;">Plan</td>
-                  </tr>
-                  <tr>
-                    <td style="padding:0 16px 14px 16px;color:#EAECEF;font-size:16px;font-weight:600;">${planLabel}</td>
-                  </tr>
-                  <tr>
-                    <td style="padding:16px 16px 6px 16px;color:#8B95A1;font-size:12px;text-transform:uppercase;letter-spacing:0.08em;border-top:1px solid #232A32;">Amount</td>
-                  </tr>
-                  <tr>
-                    <td style="padding:0 16px 14px 16px;color:#46D392;font-size:18px;font-weight:700;">$${Number(amount).toFixed(2)}</td>
-                  </tr>
-                  <tr>
-                    <td style="padding:16px 16px 6px 16px;color:#8B95A1;font-size:12px;text-transform:uppercase;letter-spacing:0.08em;border-top:1px solid #232A32;">Billing date</td>
-                  </tr>
-                  <tr>
-                    <td style="padding:0 16px 16px 16px;color:#EAECEF;font-size:16px;font-weight:600;">${dueDate}</td>
-                  </tr>
-                </table>
-
-                <p style="margin:16px 0 0 0;color:#8B95A1;font-size:13px;line-height:1.6;">We&apos;ll charge the card on file on that date. You can update your payment method any time in Payment Settings.</p>
-
-                <table role="presentation" cellspacing="0" cellpadding="0" style="margin-top:18px;">
-                  <tr>
-                    <td style="border-radius:10px;background:#2C9257;">
-                      <a href="${dashboardUrl}" style="display:inline-block;padding:12px 18px;color:#ffffff;text-decoration:none;font-size:14px;font-weight:700;">Open Payment Settings</a>
-                    </td>
-                  </tr>
-                </table>
-              </td>
-            </tr>
-          </table>
-        </td>
-      </tr>
-    </table>
-  </div>
-`);
+}) =>
+  billingEmail({
+    title: "Your plan renews in 3 days",
+    preheader: `Your AutoVault plan for ${dealership || "your dealership"} renews in 3 days.`,
+    eyebrow: "Billing Reminder",
+    headline: "Your plan renews in 3 days",
+    introHtml: `Hi ${name || "there"}, this is a heads-up for <b class="av-text" style="color:#0B0B14;">${dash(dealership)}</b>.`,
+    noteHtml:
+      "We&rsquo;ll charge the card on file on that date. You can update your payment method any time in Payment Settings.",
+    footerNote:
+      "You&rsquo;re receiving this email because you have an active AutoVault subscription. &copy; 2026 AutoVault.",
+    name,
+    dealership,
+    planLabel,
+    amount,
+    dueDate,
+    dashboardUrl,
+  }),
+);
 
 registerTemplate("billingDueNotice", ({
   name,
@@ -358,304 +262,121 @@ registerTemplate("billingDueNotice", ({
   amount,
   dueDate,
   dashboardUrl,
-}) => `
-  <div style="margin:0;padding:0;background:#0A0D10;color:#EAECEF;font-family:Inter,Arial,sans-serif;">
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#0A0D10;padding:28px 12px;">
-      <tr>
-        <td align="center">
-          <table role="presentation" width="640" cellspacing="0" cellpadding="0" style="max-width:640px;width:100%;background:#12161B;border:1px solid #232A32;border-radius:16px;overflow:hidden;">
-            <tr>
-              <td style="padding:28px 28px 18px 28px;background:linear-gradient(160deg,#12161B 40%,#173021 100%);border-bottom:1px solid #232A32;">
-                <div style="font-family:'Space Grotesk',Inter,Arial,sans-serif;font-size:24px;font-weight:700;letter-spacing:-0.01em;color:#EAECEF;">AutoVault</div>
-                <div style="margin-top:10px;color:#46D392;font-size:12px;letter-spacing:0.12em;text-transform:uppercase;font-weight:700;">Billing Today</div>
-                <h1 style="margin:14px 0 0 0;font-family:'Space Grotesk',Inter,Arial,sans-serif;font-size:28px;line-height:1.15;color:#EAECEF;">Your subscription renews today</h1>
-                <p style="margin:10px 0 0 0;color:#A5AFBC;font-size:15px;line-height:1.6;">Hi ${name}, today is the billing date for <span style="color:#EAECEF;font-weight:700;">${dealership}</span>.</p>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:22px 28px 26px 28px;">
-                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#0F1419;border:1px solid #232A32;border-radius:12px;">
-                  <tr>
-                    <td style="padding:16px 16px 6px 16px;color:#8B95A1;font-size:12px;text-transform:uppercase;letter-spacing:0.08em;">Plan</td>
-                  </tr>
-                  <tr>
-                    <td style="padding:0 16px 14px 16px;color:#EAECEF;font-size:16px;font-weight:600;">${planLabel}</td>
-                  </tr>
-                  <tr>
-                    <td style="padding:16px 16px 6px 16px;color:#8B95A1;font-size:12px;text-transform:uppercase;letter-spacing:0.08em;border-top:1px solid #232A32;">Amount</td>
-                  </tr>
-                  <tr>
-                    <td style="padding:0 16px 14px 16px;color:#46D392;font-size:18px;font-weight:700;">$${Number(amount).toFixed(2)}</td>
-                  </tr>
-                  <tr>
-                    <td style="padding:16px 16px 6px 16px;color:#8B95A1;font-size:12px;text-transform:uppercase;letter-spacing:0.08em;border-top:1px solid #232A32;">Billing date</td>
-                  </tr>
-                  <tr>
-                    <td style="padding:0 16px 16px 16px;color:#EAECEF;font-size:16px;font-weight:600;">${dueDate}</td>
-                  </tr>
-                </table>
+}) =>
+  billingEmail({
+    title: "Your subscription renews today",
+    preheader: `Today is the billing date for ${dealership || "your dealership"}.`,
+    eyebrow: "Billing Today",
+    headline: "Your subscription renews today",
+    introHtml: `Hi ${name || "there"}, today is the billing date for <b class="av-text" style="color:#0B0B14;">${dash(dealership)}</b>.`,
+    noteHtml: `Stripe will charge the card on file for your ${dash(planLabel)} plan. If anything looks off, update your payment method in Payment Settings.`,
+    footerNote:
+      "You&rsquo;re receiving this email because you have an active AutoVault subscription. &copy; 2026 AutoVault.",
+    name,
+    dealership,
+    planLabel,
+    amount,
+    dueDate,
+    dashboardUrl,
+  }),
+);
 
-                <p style="margin:16px 0 0 0;color:#8B95A1;font-size:13px;line-height:1.6;">Stripe will charge the card on file for your ${planLabel} plan. If anything looks off, update your payment method in Payment Settings.</p>
+registerTemplate("resetPassword", ({ name, email, resetUrl }) =>
+  wrapBranded({
+    title: "Reset your password",
+    preheader: "We received a request to reset your AutoVault password.",
+    footerNote:
+      "You&rsquo;re receiving this email because a password reset was requested for your AutoVault account. &copy; 2026 AutoVault.",
+    body: fill(resetPasswordBody, {
+      name: name || "there",
+      email: dash(email),
+      resetUrl,
+    }),
+  }),
+);
 
-                <table role="presentation" cellspacing="0" cellpadding="0" style="margin-top:18px;">
-                  <tr>
-                    <td style="border-radius:10px;background:#2C9257;">
-                      <a href="${dashboardUrl}" style="display:inline-block;padding:12px 18px;color:#ffffff;text-decoration:none;font-size:14px;font-weight:700;">Open Payment Settings</a>
-                    </td>
-                  </tr>
-                </table>
-              </td>
-            </tr>
-          </table>
-        </td>
-      </tr>
-    </table>
-  </div>
-`);
-
-registerTemplate("resetPassword", ({ name, email, resetUrl }) => `
-  <div style="margin:0;padding:0;background:#0A0D10;color:#EAECEF;font-family:Inter,Arial,sans-serif;">
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#0A0D10;padding:28px 12px;">
-      <tr>
-        <td align="center">
-          <table role="presentation" width="640" cellspacing="0" cellpadding="0" style="max-width:640px;width:100%;background:#12161B;border:1px solid #232A32;border-radius:16px;overflow:hidden;">
-            <tr>
-              <td style="padding:28px 28px 18px 28px;background:linear-gradient(160deg,#12161B 40%,#173021 100%);border-bottom:1px solid #232A32;">
-                <div style="font-family:'Space Grotesk',Inter,Arial,sans-serif;font-size:24px;font-weight:700;letter-spacing:-0.01em;color:#EAECEF;">AutoVault</div>
-                <div style="margin-top:10px;color:#46D392;font-size:12px;letter-spacing:0.12em;text-transform:uppercase;font-weight:700;">Password Reset</div>
-                <h1 style="margin:14px 0 0 0;font-family:'Space Grotesk',Inter,Arial,sans-serif;font-size:28px;line-height:1.15;color:#EAECEF;">Reset your password</h1>
-                <p style="margin:10px 0 0 0;color:#A5AFBC;font-size:15px;line-height:1.6;">Hi ${name}, we received a request to reset your AutoVault password.</p>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:22px 28px 26px 28px;">
-                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#0F1419;border:1px solid #232A32;border-radius:12px;">
-                  <tr>
-                    <td style="padding:16px 16px 6px 16px;color:#8B95A1;font-size:12px;text-transform:uppercase;letter-spacing:0.08em;">Account Email</td>
-                  </tr>
-                  <tr>
-                    <td style="padding:0 16px 14px 16px;color:#EAECEF;font-size:16px;font-weight:600;">${email}</td>
-                  </tr>
-                </table>
-
-                <p style="margin:16px 0 0 0;color:#8B95A1;font-size:13px;line-height:1.6;">Click the button below to reset your password. This link expires in <span style="color:#F5A623;font-weight:700;">1 hour</span> and can only be used once.</p>
-
-                <table role="presentation" cellspacing="0" cellpadding="0" style="margin-top:18px;">
-                  <tr>
-                    <td style="border-radius:10px;background:#2C9257;">
-                      <a href="${resetUrl}" style="display:inline-block;padding:12px 24px;color:#ffffff;text-decoration:none;font-size:14px;font-weight:700;">Reset Password</a>
-                    </td>
-                  </tr>
-                </table>
-
-                <p style="margin:16px 0 0 0;color:#8B95A1;font-size:12px;line-height:1.6;">If you didn't request this, you can safely ignore this email — someone probably entered your email address by mistake.</p>
-              </td>
-            </tr>
-          </table>
-        </td>
-      </tr>
-    </table>
-  </div>
-`);
-
-function contactFieldRow(label, value, { topBorder = false, accent = false } = {}) {
-  if (!value) return "";
-  const border = topBorder ? "border-top:1px solid #232A32;" : "";
-  const valueColor = accent ? "#46D392" : "#EAECEF";
-  return `
-    <tr>
-      <td style="padding:16px 16px 6px 16px;color:#8B95A1;font-size:12px;text-transform:uppercase;letter-spacing:0.08em;${border}">${label}</td>
-    </tr>
-    <tr>
-      <td style="padding:0 16px 14px 16px;color:${valueColor};font-size:15px;font-weight:600;line-height:1.45;">${value}</td>
-    </tr>
-  `;
-}
-
-function wrapTransactionalEmail({
-  preheader = "",
-  badge,
-  badgeColor = "#46D392",
-  title,
-  introHtml = "",
-  bodyHtml,
-  headerTint = "#173021",
-  footerHtml,
-}) {
-  const pre = preheader
-    ? `<div style="display:none;max-height:0;overflow:hidden;opacity:0;color:#0A0D10;font-size:1px;line-height:1px;">${preheader}</div>`
-    : "";
-  const footer =
-    footerHtml === undefined
-      ? `<p style="margin:22px 0 0 0;color:#5A636D;font-size:12px;line-height:1.6;">AutoVault Support &middot; Sent from the dealership CRM.</p>`
-      : footerHtml;
-  return `
-  <div style="margin:0;padding:0;background:#0A0D10;color:#EAECEF;font-family:Inter,Arial,sans-serif;">
-    ${pre}
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#0A0D10;padding:28px 12px;">
-      <tr>
-        <td align="center">
-          <table role="presentation" width="640" cellspacing="0" cellpadding="0" style="max-width:640px;width:100%;background:#12161B;border:1px solid #232A32;border-radius:16px;overflow:hidden;">
-            <tr>
-              <td style="padding:28px 28px 18px 28px;background:linear-gradient(160deg,#12161B 40%,${headerTint} 100%);border-bottom:1px solid #232A32;">
-                <div style="font-family:'Space Grotesk',Inter,Arial,sans-serif;font-size:24px;font-weight:700;letter-spacing:-0.01em;color:#EAECEF;">AutoVault</div>
-                <div style="margin-top:10px;color:${badgeColor};font-size:12px;letter-spacing:0.12em;text-transform:uppercase;font-weight:700;">${badge}</div>
-                <h1 style="margin:14px 0 0 0;font-family:'Space Grotesk',Inter,Arial,sans-serif;font-size:28px;line-height:1.2;color:#EAECEF;">${title}</h1>
-                ${introHtml ? `<p style="margin:10px 0 0 0;color:#A5AFBC;font-size:15px;line-height:1.6;">${introHtml}</p>` : ""}
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:22px 28px 26px 28px;">
-                ${bodyHtml}
-                ${footer}
-              </td>
-            </tr>
-          </table>
-        </td>
-      </tr>
-    </table>
-  </div>`;
-}
-
-function supportPriorityTheme(priority) {
-  const key = String(priority || "Normal");
-  if (key === "Urgent") {
-    return {
-      color: "#F07178",
-      pillBg: "#3A1A1C",
-      pillBorder: "#F07178",
-      headerTint: "#301417",
-      badge: "Urgent support",
-      pill: "Urgent — reply ASAP",
-    };
-  }
-  if (key === "Low") {
-    return {
-      color: "#A5AFBC",
-      pillBg: "#1A1F26",
-      pillBorder: "#3A424A",
-      headerTint: "#1A1F26",
-      badge: "Support request",
-      pill: "Low priority",
-    };
-  }
+function contactVars(data = {}) {
+  const site = (data.siteUrl || "https://www.autovault360.com").replace(/\/$/, "");
   return {
-    color: "#46D392",
-    pillBg: "#173021",
-    pillBorder: "#2C9257",
-    headerTint: "#173021",
-    badge: "Support request",
-    pill: "Normal priority",
+    firstName: data.firstName || "there",
+    fullName: dash(data.fullName || data.firstName),
+    email: dash(data.email),
+    company: dash(data.company),
+    phone: dash(data.phone),
+    state: dash(data.state),
+    submittedAt: dash(data.submittedAt),
+    messageHtml: data.messageHtml || data.message || "(no message)",
+    supportEmail: data.supportEmail || "support@autovault360.com",
+    ctaUrl: data.ctaUrl || site,
   };
 }
 
-function supportPriorityPill(theme) {
-  return `<div style="display:inline-block;background:${theme.pillBg};border:1px solid ${theme.pillBorder};color:${theme.color};font-size:12px;font-weight:700;letter-spacing:0.04em;text-transform:uppercase;padding:7px 12px;border-radius:999px;margin-bottom:16px;">${theme.pill}</div>`;
-}
-
-function supportCtaButton(href, label) {
-  if (!href) return "";
-  return `
-    <table role="presentation" cellspacing="0" cellpadding="0" style="margin-top:18px;">
-      <tr>
-        <td style="border-radius:10px;background:#2C9257;">
-          <a href="${href}" style="display:inline-block;padding:12px 18px;color:#ffffff;text-decoration:none;font-size:14px;font-weight:700;">${label}</a>
-        </td>
-      </tr>
-    </table>`;
-}
-
-registerTemplate("contactInbound", ({
-  firstName,
-  fullName,
-  email,
-  company,
-  phone,
-  state,
-  message,
-  submittedAt,
-  supportEmail,
-  siteUrl,
-}) => {
-  const site = siteUrl || "https://www.autovault360.com";
-  const who = fullName || firstName || "the sender";
-  const details = [
-    `<b>Name:</b> ${who}`,
-    `<b>Email:</b> ${email || "—"}`,
-    phone ? `<b>Mobile:</b> ${phone}` : null,
-    state ? `<b>State:</b> ${state}` : null,
-    "",
-    String(message || "(no message)").replace(/\r\n|\r|\n/g, "<br>"),
-  ]
-    .filter((line) => line !== null)
-    .join("<br>");
-
-  return fillSupportConfirmation({
-    firstName: firstName || "team",
-    ticketId: "AV-CONTACT",
-    submittedAt,
-    dealership: company || "—",
-    topic: "Website contact",
-    subject: who !== "the sender" ? `From ${who}` : "Contact form",
-    priority: "Normal",
-    messageHtml: details,
-    supportEmail,
-    siteUrl: site,
-    preheader: `New Contact Us message from ${who}`,
-    eyebrow: "Get in touch",
-    headline: "New Contact Us message",
-    introHtml: `Someone reached out from the Contact form. Reply directly to this email to respond to <b class="av-text" style="color:#0B0B14;">${who}</b>.`,
-    pill: "New message",
-    noteHtml: `Reply to this email to reach <b class="av-text" style="color:#0B0B14;">${who}</b>${email ? ` at ${email}` : ""}.`,
-    ctaUrl: `${site.replace(/\/$/, "")}/contact`,
-    ctaLabel: "Open Contact page",
-    messageLabel: "How can we help?",
-    footerNote:
-      "You&rsquo;re receiving this email because someone submitted the AutoVault Contact form. &copy; 2026 AutoVault.",
+registerTemplate("contactInbound", (data) => {
+  const site = (data.siteUrl || "https://www.autovault360.com").replace(/\/$/, "");
+  return fill(contactInboundHtml, {
+    ...contactVars(data),
+    ctaUrl: `${site}/contact`,
   });
 });
 
-registerTemplate("contactAutoReply", ({
-  firstName,
-  ticketId,
-  submittedAt,
-  dealership,
-  topic,
-  subject,
-  priority,
-  messageHtml,
-  supportEmail,
-  siteUrl,
-}) => {
-  const name = firstName || "there";
-  const support = supportEmail || "support@autovault360.com";
-  const site = siteUrl || "https://www.autovault360.com";
+registerTemplate("contactAutoReply", (data) =>
+  fill(contactAutoReplyHtml, {
+    ...contactVars(data),
+    ctaUrl: (data.siteUrl || "https://www.autovault360.com").replace(/\/$/, ""),
+  }),
+);
 
-  return fillSupportConfirmation({
-    firstName: name,
-    ticketId: ticketId || "AV-CONTACT",
-    submittedAt,
-    dealership,
-    topic: topic || "Website contact",
-    subject,
-    priority,
-    messageHtml,
-    supportEmail: support,
-    siteUrl: site,
-    preheader:
-      "Thanks for contacting AutoVault. We typically reply within one business day.",
-    eyebrow: "Get in touch",
-    headline: "We got your message",
-    introHtml: `Hi ${name}, thanks for reaching out from the Contact page. Our team has your note and will get back to you shortly.`,
-    pill: "Message received",
-    noteHtml: `Need to add anything? Reply to this email or write us at <a href="mailto:${support}" class="av-accent" style="color:#2743E8;text-decoration:none;font-weight:bold;">${support}</a>.`,
-    ctaUrl: site,
-    ctaLabel: "Back to AutoVault",
-    messageLabel: "How can we help?",
+registerTemplate("supportInbound", (data = {}) => {
+  const priority = data.priority || "Normal";
+  const pill =
+    priority === "Urgent"
+      ? "Urgent — reply ASAP"
+      : priority === "Low"
+        ? "Low priority"
+        : "Normal priority";
+  const eyebrow = priority === "Urgent" ? "Urgent support" : "Support request";
+
+  return wrapBranded({
+    title: data.subject || "New support ticket",
+    preheader: `${priority} · ${data.topic || "General"} · ${data.subject || "New support ticket"}`,
     footerNote:
-      "You&rsquo;re receiving this email because you submitted the AutoVault Contact form. &copy; 2026 AutoVault.",
+      "You&rsquo;re receiving this email because a dealership submitted a support request. &copy; 2026 AutoVault.",
+    body: fill(supportInboundBody, {
+      eyebrow,
+      subject: dash(data.subject),
+      fromName: dash(data.fromName),
+      dealership: dash(data.dealership),
+      priorityLabel: String(priority).toLowerCase(),
+      pill,
+      ticketId: dash(data.ticketId),
+      submittedAt: dash(data.submittedAt),
+      planLabel: dash(data.planLabel),
+      location: dash(data.location),
+      dealershipPhone: dash(data.dealershipPhone),
+      fromRole: dash(data.fromRole),
+      fromEmail: dash(data.fromEmail),
+      fromPhone: dash(data.fromPhone),
+      topic: dash(data.topic),
+      priority,
+      messageHtml: data.messageHtml || "(no message)",
+    }),
   });
 });
+
+registerTemplate("supportAutoReply", (data = {}) =>
+  fill(supportAutoReplyHtml, {
+    firstName: data.firstName || "there",
+    ticketId: data.ticketId || "AV-TICKET",
+    submittedAt: dash(data.submittedAt),
+    dealership: dash(data.dealership),
+    topic: data.topic || "General",
+    priority: data.priority || "Normal",
+    subject: dash(data.subject),
+    messageHtml: data.messageHtml || "(no message)",
+    supportEmail: data.supportEmail || "support@autovault360.com",
+    siteUrl: data.siteUrl || "https://www.autovault360.com",
+  }),
+);
 
 export function subscriptionWelcomeEmail(data) {
   return renderTemplate("subscriptionWelcome", data);
@@ -681,6 +402,10 @@ export function billingDueNoticeEmail(data) {
   return renderTemplate("billingDueNotice", data);
 }
 
+export function taxReminderEmail(data) {
+  return renderTemplate("taxReminder", data);
+}
+
 export function contactInboundEmail(data) {
   return renderTemplate("contactInbound", data);
 }
@@ -688,68 +413,6 @@ export function contactInboundEmail(data) {
 export function contactAutoReplyEmail(data) {
   return renderTemplate("contactAutoReply", data);
 }
-
-registerTemplate("supportInbound", ({
-  ticketId,
-  submittedAt,
-  dealership,
-  planLabel,
-  location,
-  dealershipPhone,
-  fromName,
-  fromRole,
-  fromEmail,
-  fromPhone,
-  topic,
-  subject,
-  priority,
-  messageHtml,
-}) => {
-  const theme = supportPriorityTheme(priority);
-  const rows = [
-    contactFieldRow("Ticket", ticketId, { accent: true }),
-    contactFieldRow("Submitted", submittedAt, { topBorder: true }),
-    contactFieldRow("Dealership", dealership, { topBorder: true }),
-    contactFieldRow("Plan", planLabel, { topBorder: true }),
-    contactFieldRow("Location", location, { topBorder: true }),
-    contactFieldRow("Dealership phone", dealershipPhone, { topBorder: true }),
-    contactFieldRow("From", fromName, { topBorder: true }),
-    contactFieldRow("Role", fromRole, { topBorder: true }),
-    contactFieldRow("Email", fromEmail, { topBorder: true, accent: true }),
-    contactFieldRow("Phone", fromPhone, { topBorder: true }),
-    contactFieldRow("Topic", topic, { topBorder: true }),
-    contactFieldRow("Priority", priority, { topBorder: true }),
-    contactFieldRow("Subject", subject, { topBorder: true }),
-  ].join("");
-
-  const bodyHtml = `
-    ${supportPriorityPill(theme)}
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#0F1419;border:1px solid #232A32;border-radius:12px;">
-      ${rows}
-      <tr>
-        <td style="padding:16px 16px 6px 16px;color:#8B95A1;font-size:12px;text-transform:uppercase;letter-spacing:0.08em;border-top:1px solid #232A32;">Message</td>
-      </tr>
-      <tr>
-        <td style="padding:0 16px 16px 16px;">
-          <div style="background:#0C1014;border:1px solid #232A32;border-left:3px solid ${theme.color};border-radius:11px;padding:14px 16px;color:#EAECEF;font-size:15px;line-height:1.65;">${messageHtml || "(no message)"}</div>
-        </td>
-      </tr>
-    </table>
-    <p style="margin:16px 0 0 0;color:#8B95A1;font-size:13px;line-height:1.6;">Reply to this email to reach <span style="color:#EAECEF;font-weight:700;">${fromName}</span> directly.</p>
-  `;
-
-  return wrapTransactionalEmail({
-    preheader: `${priority} · ${topic} · ${subject}`,
-    badge: theme.badge,
-    badgeColor: theme.color,
-    headerTint: theme.headerTint,
-    title: subject || "New support ticket",
-    introHtml: `<span style="color:#EAECEF;font-weight:700;">${fromName}</span> at <span style="color:#EAECEF;font-weight:700;">${dealership}</span> submitted a ${String(priority || "Normal").toLowerCase()} request.`,
-    bodyHtml,
-  });
-});
-
-registerTemplate("supportAutoReply", (data) => fillSupportConfirmation(data));
 
 export function supportInboundEmail(data) {
   return renderTemplate("supportInbound", data);
