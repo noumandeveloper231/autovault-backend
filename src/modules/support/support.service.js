@@ -1,6 +1,6 @@
 import { prisma } from "../../lib/prisma.js";
 import { env } from "../../config/env.js";
-import { sendEmail } from "../../utils/email.js";
+import { sendEmail, publicSiteUrl, emailsMatch } from "../../utils/email.js";
 import {
   supportInboundEmail,
   supportAutoReplyEmail,
@@ -148,10 +148,7 @@ export async function createSupportMessage({
   });
 
   const to = env.CONTACT_TO_EMAIL || "support@autovault360.com";
-  const siteUrl = String(env.FRONTEND_URL || "https://www.autovault360.com").replace(
-    /\/+$/,
-    "",
-  );
+  const siteUrl = publicSiteUrl();
   const ticketId = ticketRef(row.id);
   const location = [dealership.city, dealership.state].filter(Boolean).join(", ");
   const templateData = {
@@ -175,15 +172,19 @@ export async function createSupportMessage({
   };
 
   const subjectPrefix = row.priority === "Urgent" ? "[Urgent]" : "[Support]";
-  try {
-    await sendEmail({
-      to,
-      subject: `${subjectPrefix} ${row.subject} — ${dealership.name}`,
-      html: supportInboundEmail(templateData),
-      replyTo: fromEmail ? { email: fromEmail, name: displayName } : undefined,
-    });
-  } catch (err) {
-    logger.error({ err, supportMessageId: row.id }, "[support] failed to send notify email");
+  const notifyAndConfirmAreSameInbox = fromEmail && emailsMatch(fromEmail, to);
+
+  if (!notifyAndConfirmAreSameInbox) {
+    try {
+      await sendEmail({
+        to,
+        subject: `${subjectPrefix} ${row.subject} — ${dealership.name}`,
+        html: supportInboundEmail(templateData),
+        replyTo: fromEmail ? { email: fromEmail, name: displayName } : undefined,
+      });
+    } catch (err) {
+      logger.error({ err, supportMessageId: row.id }, "[support] failed to send notify email");
+    }
   }
 
   if (fromEmail) {

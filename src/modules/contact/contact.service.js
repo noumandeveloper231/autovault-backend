@@ -1,5 +1,5 @@
 import { env } from "../../config/env.js";
-import { sendEmail } from "../../utils/email.js";
+import { sendEmail, publicSiteUrl, emailsMatch } from "../../utils/email.js";
 import {
   contactInboundEmail,
   contactAutoReplyEmail,
@@ -34,6 +34,26 @@ function escapeHtml(str) {
     .replace(/"/g, "&quot;");
 }
 
+function toEmailParagraph(escapedText) {
+  return String(escapedText || "(no message)").replace(/\r\n|\r|\n/g, "<br>");
+}
+
+function formatSubmittedAt(date = new Date()) {
+  try {
+    return new Date(date).toLocaleString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+      timeZone: "America/New_York",
+      timeZoneName: "short",
+    });
+  } catch {
+    return String(date || "");
+  }
+}
+
 export async function submitContact(payload, ip) {
   if (payload.website) {
     // Silent success for bots
@@ -56,45 +76,60 @@ export async function submitContact(payload, ip) {
 
   const fullName = [first, last].filter(Boolean).join(" ");
   const to = env.CONTACT_TO_EMAIL || "support@autovault360.com";
-  const siteUrl = String(env.FRONTEND_URL || "https://www.autovault360.com").replace(
-    /\/+$/,
-    "",
-  );
+  const siteUrl = publicSiteUrl();
+  const escapedMessage = message ? escapeHtml(message) : "";
 
-  const templateData = {
+  const inboundData = {
     firstName: escapeHtml(first),
     fullName: escapeHtml(fullName),
     email: escapeHtml(email),
     company: company ? escapeHtml(company) : "",
     phone: phone ? escapeHtml(phone) : "",
     state: state ? escapeHtml(state) : "",
-    message: message ? escapeHtml(message) : "",
+    message: escapedMessage,
     supportEmail: escapeHtml(to),
     siteUrl,
   };
 
-  try {
-    await sendEmail({
-      to,
-      subject: `AutoVault Contact — ${fullName}`,
-      html: contactInboundEmail(templateData),
-      replyTo: { email, name: fullName },
-    });
-  } catch (err) {
-    logger.error({ err, email }, "[contact] failed to send email");
-    throw err;
+  const confirmationData = {
+    firstName: escapeHtml(first),
+    ticketId: "AV-CONTACT",
+    submittedAt: escapeHtml(formatSubmittedAt()),
+    dealership: company ? escapeHtml(company) : "—",
+    topic: "Website contact",
+    subject: escapedMessage
+      ? escapeHtml(message.length > 80 ? `${message.slice(0, 77)}…` : message)
+      : "Contact form",
+    priority: "Normal",
+    messageHtml: toEmailParagraph(escapedMessage),
+    supportEmail: escapeHtml(to),
+    siteUrl,
+  };
+
+  if (!emailsMatch(email, to)) {
+    try {
+      await sendEmail({
+        to,
+        subject: `AutoVault Contact — ${fullName}`,
+        html: contactInboundEmail(inboundData),
+        replyTo: { email, name: fullName },
+      });
+    } catch (err) {
+      logger.error({ err, email }, "[contact] failed to send email");
+      throw err;
+    }
   }
 
   try {
     await sendEmail({
       to: { email, name: fullName },
       subject: "We got your message — AutoVault",
-      html: contactAutoReplyEmail(templateData),
+      html: contactAutoReplyEmail(confirmationData),
       replyTo: { email: to, name: "AutoVault" },
     });
   } catch (err) {
-    // Internal notice already delivered; don't fail the form if auto-reply bounces.
     logger.error({ err, email }, "[contact] failed to send auto-reply");
+    if (emailsMatch(email, to)) throw err;
   }
 
   return { ok: true };

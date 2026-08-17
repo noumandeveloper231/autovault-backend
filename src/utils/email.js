@@ -212,4 +212,20 @@ export async function sendBulkEmails(emails) {
   return results;
 }
 
+export function publicSiteUrl() {
+  const fallback = "https://www.autovault360.com";
+  const raw = String(env.FRONTEND_URL || fallback).replace(/\/+$/, "");
+  try {
+    const { hostname } = new URL(raw);
+    if (hostname === "localhost" || hostname === "127.0.0.1") return fallback;
+  } catch {
+    return fallback;
+  }
+  return raw || fallback;
+}
+
+export function emailsMatch(a, b) {
+  return String(a || "").trim().toLowerCase() === String(b || "").trim().toLowerCase();
+}
+
 export { getTemplate, renderTemplate };

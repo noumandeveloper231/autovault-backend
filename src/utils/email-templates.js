@@ -3,14 +3,55 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const welcomeEmailHtml = readFileSync(
-  join(__dirname, "..", "emails", "subscription-welcome.html"),
-  "utf8",
-);
-const supportAutoReplyHtml = readFileSync(
-  join(__dirname, "..", "emails", "support-auto-reply.html"),
-  "utf8",
-);
+const projectRoot = join(__dirname, "..", "..", "..");
+
+function loadRootTemplate(filename) {
+  return readFileSync(join(projectRoot, filename), "utf8");
+}
+
+const welcomeEmailHtml = loadRootTemplate("AutoVault_Welcome_Email.html")
+  .replaceAll("jordan@summitmotors.com", "{{email}}")
+  .replaceAll("Av-Temp-8k2mQ", "{{tempPassword}}");
+
+const supportAutoReplyHtml = loadRootTemplate("AutoVault_Support_Email.html")
+  .replaceAll("AV-1A2B3C4D", "{{ticketId}}")
+  .replace("Hi Jordan, ticket", "Hi {{firstName}}, ticket")
+  .replace("Aug 15, 2026, 10:17 AM EDT", "{{submittedAt}}")
+  .replace("Summit Motors", "{{dealership}}")
+  .replace("Account / Billing", "{{topic}}")
+  .replace(">Normal</td></tr>", ">{{priority}}</td></tr>")
+  .replace("Question about my subscription", "{{subject}}")
+  .replace(
+    "Hi team &mdash; I wanted to confirm how flooring costs show up on the vehicles page after a sale. Thanks.",
+    "{{messageHtml}}",
+  )
+  .replaceAll("support@autovault360.com", "{{supportEmail}}")
+  .replace('href="https://www.autovault360.com"', 'href="{{siteUrl}}"');
+
+function fillSupportConfirmation({
+  firstName,
+  ticketId,
+  submittedAt,
+  dealership,
+  topic,
+  subject,
+  priority,
+  messageHtml,
+  supportEmail,
+  siteUrl,
+}) {
+  return supportAutoReplyHtml
+    .replaceAll("{{firstName}}", firstName || "there")
+    .replaceAll("{{ticketId}}", ticketId || "AV-TICKET")
+    .replaceAll("{{submittedAt}}", submittedAt || "")
+    .replaceAll("{{dealership}}", dealership || "—")
+    .replaceAll("{{topic}}", topic || "General")
+    .replaceAll("{{priority}}", priority || "Normal")
+    .replaceAll("{{subject}}", subject || "")
+    .replaceAll("{{messageHtml}}", messageHtml || "")
+    .replaceAll("{{supportEmail}}", supportEmail || "support@autovault360.com")
+    .replaceAll("{{siteUrl}}", siteUrl || "https://www.autovault360.com");
+}
 
 const templates = {};
 
@@ -565,81 +606,29 @@ registerTemplate("contactInbound", ({
 
 registerTemplate("contactAutoReply", ({
   firstName,
-  fullName,
-  email,
-  company,
-  phone,
-  state,
-  message,
+  ticketId,
+  submittedAt,
+  dealership,
+  topic,
+  subject,
+  priority,
+  messageHtml,
   supportEmail,
   siteUrl,
-}) => {
-  const rows = [
-    contactFieldRow("Name", fullName),
-    contactFieldRow("Email", email, { topBorder: true, accent: true }),
-    contactFieldRow("Company / Dealership", company, { topBorder: true }),
-    contactFieldRow("Mobile number", phone, { topBorder: true }),
-    contactFieldRow("State", state, { topBorder: true }),
-  ].join("");
-
-  return `
-  <div style="margin:0;padding:0;background:#0A0D10;color:#EAECEF;font-family:Inter,Arial,sans-serif;">
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#0A0D10;padding:28px 12px;">
-      <tr>
-        <td align="center">
-          <table role="presentation" width="640" cellspacing="0" cellpadding="0" style="max-width:640px;width:100%;background:#12161B;border:1px solid #232A32;border-radius:16px;overflow:hidden;">
-            <tr>
-              <td style="padding:28px 28px 18px 28px;background:linear-gradient(160deg,#12161B 40%,#173021 100%);border-bottom:1px solid #232A32;">
-                <div style="font-family:'Space Grotesk',Inter,Arial,sans-serif;font-size:24px;font-weight:700;letter-spacing:-0.01em;color:#EAECEF;">AutoVault</div>
-                <div style="margin-top:10px;color:#46D392;font-size:12px;letter-spacing:0.12em;text-transform:uppercase;font-weight:700;">Get in touch</div>
-                <h1 style="margin:14px 0 0 0;font-family:'Space Grotesk',Inter,Arial,sans-serif;font-size:30px;line-height:1.15;color:#EAECEF;">Thanks — we'll be in touch soon!</h1>
-                <p style="margin:10px 0 0 0;color:#A5AFBC;font-size:15px;line-height:1.6;">Hi ${firstName}, we received your message and our team will get back to you shortly.</p>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:22px 28px 26px 28px;">
-                <div style="display:inline-block;background:rgba(44,146,87,.13);border:1px solid rgba(44,146,87,.34);color:#46D392;font-size:13px;font-weight:700;padding:8px 12px;border-radius:999px;margin-bottom:16px;">Message received</div>
-
-                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#0F1419;border:1px solid #232A32;border-radius:12px;">
-                  ${rows}
-                  ${
-                    message
-                      ? `<tr>
-                    <td style="padding:16px 16px 6px 16px;color:#8B95A1;font-size:12px;text-transform:uppercase;letter-spacing:0.08em;border-top:1px solid #232A32;">Your message</td>
-                  </tr>
-                  <tr>
-                    <td style="padding:0 16px 16px 16px;">
-                      <div style="background:#0C1014;border:1px solid #232A32;border-radius:11px;padding:14px 16px;color:#EAECEF;font-size:15px;line-height:1.6;white-space:pre-wrap;">${message}</div>
-                    </td>
-                  </tr>`
-                      : ""
-                  }
-                </table>
-
-                <p style="margin:16px 0 0 0;color:#8B95A1;font-size:13px;line-height:1.6;">Need to add anything? Reply to this email or write us at <a href="mailto:${supportEmail}" style="color:#46D392;text-decoration:none;font-weight:600;">${supportEmail}</a>.</p>
-
-                ${
-                  siteUrl
-                    ? `<table role="presentation" cellspacing="0" cellpadding="0" style="margin-top:18px;">
-                  <tr>
-                    <td style="border-radius:10px;background:#2C9257;">
-                      <a href="${siteUrl}" style="display:inline-block;padding:12px 18px;color:#ffffff;text-decoration:none;font-size:14px;font-weight:700;">Back to AutoVault</a>
-                    </td>
-                  </tr>
-                </table>`
-                    : ""
-                }
-
-                <p style="margin:18px 0 0 0;color:#5A636D;font-size:12px;line-height:1.6;">— The AutoVault team</p>
-              </td>
-            </tr>
-          </table>
-        </td>
-      </tr>
-    </table>
-  </div>
-`;
-});
+}) =>
+  fillSupportConfirmation({
+    firstName,
+    ticketId,
+    submittedAt,
+    dealership,
+    topic,
+    subject,
+    priority,
+    messageHtml,
+    supportEmail,
+    siteUrl,
+  }),
+);
 
 export function subscriptionWelcomeEmail(data) {
   return renderTemplate("subscriptionWelcome", data);
@@ -733,30 +722,7 @@ registerTemplate("supportInbound", ({
   });
 });
 
-registerTemplate("supportAutoReply", ({
-  firstName,
-  ticketId,
-  submittedAt,
-  dealership,
-  topic,
-  subject,
-  priority,
-  messageHtml,
-  supportEmail,
-  siteUrl,
-}) =>
-  supportAutoReplyHtml
-    .replaceAll("{{firstName}}", firstName || "there")
-    .replaceAll("{{ticketId}}", ticketId)
-    .replaceAll("{{submittedAt}}", submittedAt)
-    .replaceAll("{{dealership}}", dealership)
-    .replaceAll("{{topic}}", topic)
-    .replaceAll("{{priority}}", priority)
-    .replaceAll("{{subject}}", subject)
-    .replaceAll("{{messageHtml}}", messageHtml || "")
-    .replaceAll("{{supportEmail}}", supportEmail)
-    .replaceAll("{{siteUrl}}", siteUrl),
-);
+registerTemplate("supportAutoReply", (data) => fillSupportConfirmation(data));
 
 export function supportInboundEmail(data) {
   return renderTemplate("supportInbound", data);
