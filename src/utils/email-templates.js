@@ -3,30 +3,16 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const projectRoot = join(__dirname, "..", "..", "..");
+const emailsDir = join(__dirname, "..", "emails");
 
-function loadRootTemplate(filename) {
-  return readFileSync(join(projectRoot, filename), "utf8");
-}
-
-const welcomeEmailHtml = loadRootTemplate("AutoVault_Welcome_Email.html")
-  .replaceAll("jordan@summitmotors.com", "{{email}}")
-  .replaceAll("Av-Temp-8k2mQ", "{{tempPassword}}");
-
-const supportAutoReplyHtml = loadRootTemplate("AutoVault_Support_Email.html")
-  .replaceAll("AV-1A2B3C4D", "{{ticketId}}")
-  .replace("Hi Jordan, ticket", "Hi {{firstName}}, ticket")
-  .replace("Aug 15, 2026, 10:17 AM EDT", "{{submittedAt}}")
-  .replace("Summit Motors", "{{dealership}}")
-  .replace("Account / Billing", "{{topic}}")
-  .replace(">Normal</td></tr>", ">{{priority}}</td></tr>")
-  .replace("Question about my subscription", "{{subject}}")
-  .replace(
-    "Hi team &mdash; I wanted to confirm how flooring costs show up on the vehicles page after a sale. Thanks.",
-    "{{messageHtml}}",
-  )
-  .replaceAll("support@autovault360.com", "{{supportEmail}}")
-  .replace('href="https://www.autovault360.com"', 'href="{{siteUrl}}"');
+const welcomeEmailHtml = readFileSync(
+  join(emailsDir, "subscription-welcome.html"),
+  "utf8",
+);
+const supportAutoReplyHtml = readFileSync(
+  join(emailsDir, "support-auto-reply.html"),
+  "utf8",
+);
 
 function fillSupportConfirmation({
   firstName,
