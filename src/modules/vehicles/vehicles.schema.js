@@ -161,6 +161,41 @@ export const flooringBreakdownQuerySchema = z.object({
   asOfDate: z.coerce.date().optional(),
 });
 
+const flooringUndoTierSchema = z.object({
+  max: z.coerce.number().min(0).nullable().optional(),
+  rate: z.coerce.number().min(0).optional().default(0),
+});
+
+const flooringUndoConfigSchema = z.object({
+  buyFee: z.coerce.number().min(0).optional().default(0),
+  gracePeriod: z.coerce.number().min(0).optional().default(0),
+  payoffDays: z.coerce.number().min(0).optional().default(90),
+  applied: z.boolean().optional().default(false),
+  scope: z.string().max(40).optional().default("all"),
+  planId: z.string().uuid().optional().nullable(),
+  tiers: z.array(flooringUndoTierSchema).optional().default([]),
+});
+
+const flooringUndoVehicleSchema = z.object({
+  vin: z.string().min(1).max(17),
+  id: z.string().uuid().optional().nullable(),
+  floored: z.boolean().optional().default(false),
+  flooringOverride: z.coerce.number().min(0).optional().nullable(),
+  flooringPaidOff: z.boolean().optional().default(false),
+  flooringPaidDate: z.string().max(40).optional().nullable(),
+  flooringPaidAmount: z.coerce.number().min(0).optional().nullable(),
+  flooringStartDate: z.union([z.string(), z.coerce.date()]).optional().nullable(),
+  flooringPlanId: z.string().uuid().optional().nullable(),
+  flooringManual: z.boolean().optional().default(false),
+  flooringFees: z.coerce.number().min(0).optional().nullable(),
+});
+
+/** Client may send a snapshot; if omitted the server captures current DB state. */
+export const flooringUndoSaveSchema = z.object({
+  config: flooringUndoConfigSchema.optional(),
+  vehicles: z.array(flooringUndoVehicleSchema).max(5000).optional(),
+});
+
 export const inventoryStatsQuerySchema = z
   .object({
     mode: z.enum(["all", "year", "month"]).optional().default("all"),

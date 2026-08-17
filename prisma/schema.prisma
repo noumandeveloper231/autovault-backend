@@ -251,6 +251,7 @@ model Dealership {
   dealershipExpenses   DealershipExpense[]
   vehicleExpenses      VehicleExpense[]
   flooringPlans        FlooringPlan[]
+  flooringUndoSnapshot FlooringUndoSnapshot?
   taxSettings          DealershipTaxSettings?
   taxFilingPeriods     TaxFilingPeriod[]
   salesRepProfiles     SalesRepProfile[]
@@ -604,6 +605,21 @@ model FlooringPlan {
 
   @@index([dealershipId, isActive])
   @@map("flooring_plans")
+}
+
+/** One 3-hour undo snapshot per dealership after flooring is removed from all vehicles. */
+model FlooringUndoSnapshot {
+  id           String     @id @default(uuid()) @db.Uuid
+  dealershipId String     @unique @db.Uuid
+  dealership   Dealership @relation(fields: [dealershipId], references: [id], onDelete: Cascade)
+  expiresAt    DateTime
+  snapshot     Json
+  createdById  String?    @db.Uuid
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@index([expiresAt])
+  @@map("flooring_undo_snapshots")
 }
 
 // ??? Customers ????????????????????????????????????????????????????????????????

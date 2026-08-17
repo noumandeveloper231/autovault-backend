@@ -23,6 +23,7 @@ import {
   updateFlooringPlanSchema,
   vehicleExpenseParams,
   flooringBreakdownQuerySchema,
+  flooringUndoSaveSchema,
   inventoryStatsQuerySchema,
 } from "./vehicles.schema.js";
 import * as ctrl from "./vehicles.controller.js";
@@ -154,6 +155,23 @@ flooringRouter.get(
   "/breakdown",
   validateQuery(flooringBreakdownQuerySchema),
   asyncHandler(ctrl.flooringBreakdown),
+);
+flooringRouter.get("/undo", asyncHandler(ctrl.getFlooringUndo));
+flooringRouter.put(
+  "/undo",
+  requireVehicleWrite,
+  validateBody(flooringUndoSaveSchema),
+  asyncHandler(ctrl.saveFlooringUndo),
+);
+flooringRouter.post(
+  "/undo",
+  requireVehicleWrite,
+  asyncHandler(ctrl.restoreFlooringUndo),
+);
+flooringRouter.delete(
+  "/undo",
+  requireVehicleWrite,
+  asyncHandler(ctrl.clearFlooringUndo),
 );
 
 export { vehiclesRouter, flooringPlansRouter, flooringRouter };

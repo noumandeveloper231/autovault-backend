@@ -165,3 +165,36 @@ export async function flooringBreakdown(req, res) {
   );
   return res.json(result);
 }
+
+export async function getFlooringUndo(req, res) {
+  const undo = await flooringService.getFlooringUndo(dealershipId(req));
+  return res.json({ undo });
+}
+
+export async function saveFlooringUndo(req, res) {
+  const undo = await flooringService.saveFlooringUndo(
+    dealershipId(req),
+    req.body || {},
+    req.auth.userId,
+    clientIp(req),
+  );
+  return res.status(201).json({ undo });
+}
+
+export async function restoreFlooringUndo(req, res) {
+  const result = await flooringService.restoreFlooringUndo(
+    dealershipId(req),
+    req.auth.userId,
+    clientIp(req),
+  );
+  return res.json({ ok: true, ...result, undo: null });
+}
+
+export async function clearFlooringUndo(req, res) {
+  const result = await flooringService.clearFlooringUndo(
+    dealershipId(req),
+    req.auth.userId,
+    clientIp(req),
+  );
+  return res.json({ ok: true, ...result, undo: null });
+}
