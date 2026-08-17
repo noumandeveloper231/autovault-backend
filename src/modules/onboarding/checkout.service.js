@@ -35,6 +35,19 @@ export async function createCheckout({ registrationId, plan }) {
   }
 
   let customerId = registration.stripeCustomerId;
+  if (customerId) {
+    try {
+      const existing = await stripe.customers.retrieve(customerId);
+      if (existing?.deleted) customerId = "";
+    } catch (err) {
+      const missing =
+        err?.code === "resource_missing" ||
+        err?.statusCode === 404 ||
+        /no such customer/i.test(String(err?.message || ""));
+      if (!missing) throw err;
+      customerId = "";
+    }
+  }
   if (!customerId) {
     const customer = await stripe.customers.create({
       email: registration.email,

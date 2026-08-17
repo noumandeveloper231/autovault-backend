@@ -22,10 +22,11 @@ function billingReturnUrls(dealershipOrPlan) {
       ? dealershipOrPlan
       : dealershipOrPlan?.plan;
   const dash = dashboardPathForPortal(portalForPlan(plan));
+  const join = dash.includes("?") ? "&" : "/?";
   return {
-    success: `${FRONTEND_BASE}${dash}/?billing=success#payment-settings`,
-    cancel: `${FRONTEND_BASE}${dash}/?billing=cancel#payment-settings`,
-    portal: `${FRONTEND_BASE}${dash}/?billing=portal#payment-settings`,
+    success: `${FRONTEND_BASE}${dash}${join}billing=success#payment-settings`,
+    cancel: `${FRONTEND_BASE}${dash}${join}billing=cancel#payment-settings`,
+    portal: `${FRONTEND_BASE}${dash}${join}billing=portal#payment-settings`,
   };
 }
 

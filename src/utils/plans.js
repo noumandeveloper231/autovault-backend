@@ -11,7 +11,7 @@ export const PLAN_LABEL_TO_SLUG = {
 export const PLAN_SLUG_TO_LABEL = {
   wholesaler: "Wholesalers",
   independent_dealer: "Independent Dealers",
-  growing_dealership: "Growing Dealerships",
+  growing_dealership: "Fully Loaded",
 };
 
 export const PLAN_TO_PRICE_ENV = {
@@ -61,7 +61,7 @@ export const PLAN_HIERARCHY = {
 export const PLAN_LABELS = {
   wholesaler: "Wholesalers",
   independent_dealer: "Independent Dealers",
-  growing_dealership: "Growing Dealerships",
+  growing_dealership: "Fully Loaded",
 };
 
 export const PLAN_FEATURES = {
@@ -101,7 +101,7 @@ export const PLAN_MARKETING = {
   independent_dealer:
     "Everything to run your retail lot — Jenna AI, full inventory, customer deals, flooring costs & every expense",
   growing_dealership:
-    "The full platform — your whole team, your reps and your accountant together, with Jenna AI built in",
+    "One plan, every feature — inventory, deals, flooring, expenses, tax, payroll, CPA login, and Jenna AI",
 };
 
 export const PLAN_SLUGS = [

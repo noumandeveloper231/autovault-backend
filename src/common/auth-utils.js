@@ -48,8 +48,10 @@ export function roleForPlan(plan) {
 }
 
 export function dashboardPathForPortal(portal) {
-  if (portal === "wholesale") return "/wholesale/dashboard";
-  if (portal === "sales_rep") return "/sales-rep/dashboard";
+  // Temp: only Fully Loaded (/dashboard) is sold. Wholesale/sales-rep
+  // shells stay in the SPA via ?portal=. CPA keeps its own dashboard route.
+  if (portal === "wholesale") return "/dashboard?portal=wholesale";
+  if (portal === "sales_rep") return "/dashboard?portal=sales_rep";
   if (portal === "owner") return "/owner/dashboard";
   if (portal === "cpa") return "/cpa/dashboard";
   return "/dashboard";

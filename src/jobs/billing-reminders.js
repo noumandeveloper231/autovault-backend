@@ -89,7 +89,7 @@ export async function runBillingReminders() {
         continue;
       }
 
-      const dashboardUrl = `${env.FRONTEND_URL.replace(/\/+$/, "")}${dashboardPathForPortal(portalForPlan(dealership.plan))}/#payment-settings`;
+      const dashboardUrl = `${env.FRONTEND_URL.replace(/\/+$/, "")}${dashboardPathForPortal(portalForPlan(dealership.plan))}#payment-settings`;
       const days = daysUntil(dealership.currentPeriodEnd);
       const planLabel =
         PLAN_SLUG_TO_LABEL[dealership.plan] || dealership.plan || "AutoVault";
