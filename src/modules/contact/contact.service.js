@@ -87,9 +87,19 @@ export async function submitContact(payload, ip) {
     phone: phone ? escapeHtml(phone) : "",
     state: state ? escapeHtml(state) : "",
     message: escapedMessage,
+    submittedAt: escapeHtml(formatSubmittedAt()),
     supportEmail: escapeHtml(to),
     siteUrl,
   };
+
+  const confirmationDetails = [
+    phone ? `<b>Mobile:</b> ${escapeHtml(phone)}` : null,
+    state ? `<b>State:</b> ${escapeHtml(state)}` : null,
+    phone || state ? "" : null,
+    toEmailParagraph(escapedMessage),
+  ]
+    .filter((line) => line !== null)
+    .join("<br>");
 
   const confirmationData = {
     firstName: escapeHtml(first),
@@ -101,7 +111,7 @@ export async function submitContact(payload, ip) {
       ? escapeHtml(message.length > 80 ? `${message.slice(0, 77)}…` : message)
       : "Contact form",
     priority: "Normal",
-    messageHtml: toEmailParagraph(escapedMessage),
+    messageHtml: confirmationDetails,
     supportEmail: escapeHtml(to),
     siteUrl,
   };

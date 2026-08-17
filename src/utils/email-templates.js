@@ -25,18 +25,59 @@ function fillSupportConfirmation({
   messageHtml,
   supportEmail,
   siteUrl,
+  preheader,
+  eyebrow,
+  headline,
+  introHtml,
+  pill,
+  noteHtml,
+  ctaUrl,
+  ctaLabel,
+  messageLabel,
+  footerNote,
 }) {
+  const name = firstName || "there";
+  const ticket = ticketId || "AV-TICKET";
+  const support = supportEmail || "support@autovault360.com";
+  const site = siteUrl || "https://www.autovault360.com";
+
   return supportAutoReplyHtml
-    .replaceAll("{{firstName}}", firstName || "there")
-    .replaceAll("{{ticketId}}", ticketId || "AV-TICKET")
+    .replaceAll("{{firstName}}", name)
+    .replaceAll("{{ticketId}}", ticket)
     .replaceAll("{{submittedAt}}", submittedAt || "")
     .replaceAll("{{dealership}}", dealership || "—")
     .replaceAll("{{topic}}", topic || "General")
     .replaceAll("{{priority}}", priority || "Normal")
     .replaceAll("{{subject}}", subject || "")
     .replaceAll("{{messageHtml}}", messageHtml || "")
-    .replaceAll("{{supportEmail}}", supportEmail || "support@autovault360.com")
-    .replaceAll("{{siteUrl}}", siteUrl || "https://www.autovault360.com");
+    .replaceAll("{{supportEmail}}", support)
+    .replaceAll("{{siteUrl}}", site)
+    .replaceAll(
+      "{{preheader}}",
+      preheader ||
+        `We got your request — ticket ${ticket} is in our queue. Our team typically replies within one business day.`,
+    )
+    .replaceAll("{{eyebrow}}", eyebrow || "Support Confirmation")
+    .replaceAll("{{headline}}", headline || "We got your request")
+    .replaceAll(
+      "{{introHtml}}",
+      introHtml ||
+        `Hi ${name}, ticket <b class="av-accent" style="color:#2743E8;">${ticket}</b> is in our queue.`,
+    )
+    .replaceAll("{{pill}}", pill || "Request received")
+    .replaceAll(
+      "{{noteHtml}}",
+      noteHtml ||
+        `Our team typically replies within one business day. Need to add anything? Reply to this email or write us at <a href="mailto:${support}" class="av-accent" style="color:#2743E8;text-decoration:none;font-weight:bold;">${support}</a>.`,
+    )
+    .replaceAll("{{ctaUrl}}", ctaUrl || site)
+    .replaceAll("{{ctaLabel}}", ctaLabel || "Back to AutoVault")
+    .replaceAll("{{messageLabel}}", messageLabel || "Your message")
+    .replaceAll(
+      "{{footerNote}}",
+      footerNote ||
+        "You&rsquo;re receiving this email because you contacted AutoVault support. &copy; 2026 AutoVault.",
+    );
 }
 
 const templates = {};
@@ -525,69 +566,53 @@ function supportCtaButton(href, label) {
 }
 
 registerTemplate("contactInbound", ({
+  firstName,
   fullName,
   email,
   company,
   phone,
   state,
   message,
+  submittedAt,
+  supportEmail,
   siteUrl,
 }) => {
-  const rows = [
-    contactFieldRow("Name", fullName),
-    contactFieldRow("Email", email, { topBorder: true, accent: true }),
-    contactFieldRow("Company / Dealership", company, { topBorder: true }),
-    contactFieldRow("Mobile number", phone, { topBorder: true }),
-    contactFieldRow("State", state, { topBorder: true }),
-  ].join("");
+  const site = siteUrl || "https://www.autovault360.com";
+  const who = fullName || firstName || "the sender";
+  const details = [
+    `<b>Name:</b> ${who}`,
+    `<b>Email:</b> ${email || "—"}`,
+    phone ? `<b>Mobile:</b> ${phone}` : null,
+    state ? `<b>State:</b> ${state}` : null,
+    "",
+    String(message || "(no message)").replace(/\r\n|\r|\n/g, "<br>"),
+  ]
+    .filter((line) => line !== null)
+    .join("<br>");
 
-  return `
-  <div style="margin:0;padding:0;background:#0A0D10;color:#EAECEF;font-family:Inter,Arial,sans-serif;">
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#0A0D10;padding:28px 12px;">
-      <tr>
-        <td align="center">
-          <table role="presentation" width="640" cellspacing="0" cellpadding="0" style="max-width:640px;width:100%;background:#12161B;border:1px solid #232A32;border-radius:16px;overflow:hidden;">
-            <tr>
-              <td style="padding:28px 28px 18px 28px;background:linear-gradient(160deg,#12161B 40%,#173021 100%);border-bottom:1px solid #232A32;">
-                <div style="font-family:'Space Grotesk',Inter,Arial,sans-serif;font-size:24px;font-weight:700;letter-spacing:-0.01em;color:#EAECEF;">AutoVault</div>
-                <div style="margin-top:10px;color:#46D392;font-size:12px;letter-spacing:0.12em;text-transform:uppercase;font-weight:700;">Get in touch</div>
-                <h1 style="margin:14px 0 0 0;font-family:'Space Grotesk',Inter,Arial,sans-serif;font-size:30px;line-height:1.15;color:#EAECEF;">New Contact Us message</h1>
-                <p style="margin:10px 0 0 0;color:#A5AFBC;font-size:15px;line-height:1.6;">Someone reached out from the Contact form. Reply directly to this email to respond to <span style="color:#EAECEF;font-weight:700;">${fullName}</span>.</p>
-              </td>
-            </tr>
-            <tr>
-              <td style="padding:22px 28px 26px 28px;">
-                <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#0F1419;border:1px solid #232A32;border-radius:12px;">
-                  ${rows}
-                  <tr>
-                    <td style="padding:16px 16px 6px 16px;color:#8B95A1;font-size:12px;text-transform:uppercase;letter-spacing:0.08em;border-top:1px solid #232A32;">How can we help?</td>
-                  </tr>
-                  <tr>
-                    <td style="padding:0 16px 16px 16px;">
-                      <div style="background:#0C1014;border:1px solid #232A32;border-radius:11px;padding:14px 16px;color:#EAECEF;font-size:15px;line-height:1.6;white-space:pre-wrap;">${message || "(no message)"}</div>
-                    </td>
-                  </tr>
-                </table>
-
-                ${
-                  siteUrl
-                    ? `<table role="presentation" cellspacing="0" cellpadding="0" style="margin-top:18px;">
-                  <tr>
-                    <td style="border-radius:10px;background:#2C9257;">
-                      <a href="${siteUrl}/contact" style="display:inline-block;padding:12px 18px;color:#ffffff;text-decoration:none;font-size:14px;font-weight:700;">Open Contact page</a>
-                    </td>
-                  </tr>
-                </table>`
-                    : ""
-                }
-              </td>
-            </tr>
-          </table>
-        </td>
-      </tr>
-    </table>
-  </div>
-`;
+  return fillSupportConfirmation({
+    firstName: firstName || "team",
+    ticketId: "AV-CONTACT",
+    submittedAt,
+    dealership: company || "—",
+    topic: "Website contact",
+    subject: who !== "the sender" ? `From ${who}` : "Contact form",
+    priority: "Normal",
+    messageHtml: details,
+    supportEmail,
+    siteUrl: site,
+    preheader: `New Contact Us message from ${who}`,
+    eyebrow: "Get in touch",
+    headline: "New Contact Us message",
+    introHtml: `Someone reached out from the Contact form. Reply directly to this email to respond to <b class="av-text" style="color:#0B0B14;">${who}</b>.`,
+    pill: "New message",
+    noteHtml: `Reply to this email to reach <b class="av-text" style="color:#0B0B14;">${who}</b>${email ? ` at ${email}` : ""}.`,
+    ctaUrl: `${site.replace(/\/$/, "")}/contact`,
+    ctaLabel: "Open Contact page",
+    messageLabel: "How can we help?",
+    footerNote:
+      "You&rsquo;re receiving this email because someone submitted the AutoVault Contact form. &copy; 2026 AutoVault.",
+  });
 });
 
 registerTemplate("contactAutoReply", ({
@@ -601,20 +626,36 @@ registerTemplate("contactAutoReply", ({
   messageHtml,
   supportEmail,
   siteUrl,
-}) =>
-  fillSupportConfirmation({
-    firstName,
-    ticketId,
+}) => {
+  const name = firstName || "there";
+  const support = supportEmail || "support@autovault360.com";
+  const site = siteUrl || "https://www.autovault360.com";
+
+  return fillSupportConfirmation({
+    firstName: name,
+    ticketId: ticketId || "AV-CONTACT",
     submittedAt,
     dealership,
-    topic,
+    topic: topic || "Website contact",
     subject,
     priority,
     messageHtml,
-    supportEmail,
-    siteUrl,
-  }),
-);
+    supportEmail: support,
+    siteUrl: site,
+    preheader:
+      "Thanks for contacting AutoVault. We typically reply within one business day.",
+    eyebrow: "Get in touch",
+    headline: "We got your message",
+    introHtml: `Hi ${name}, thanks for reaching out from the Contact page. Our team has your note and will get back to you shortly.`,
+    pill: "Message received",
+    noteHtml: `Need to add anything? Reply to this email or write us at <a href="mailto:${support}" class="av-accent" style="color:#2743E8;text-decoration:none;font-weight:bold;">${support}</a>.`,
+    ctaUrl: site,
+    ctaLabel: "Back to AutoVault",
+    messageLabel: "How can we help?",
+    footerNote:
+      "You&rsquo;re receiving this email because you submitted the AutoVault Contact form. &copy; 2026 AutoVault.",
+  });
+});
 
 export function subscriptionWelcomeEmail(data) {
   return renderTemplate("subscriptionWelcome", data);
