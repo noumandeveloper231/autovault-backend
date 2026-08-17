@@ -7,6 +7,10 @@ const welcomeEmailHtml = readFileSync(
   join(__dirname, "..", "emails", "subscription-welcome.html"),
   "utf8",
 );
+const supportAutoReplyHtml = readFileSync(
+  join(__dirname, "..", "emails", "support-auto-reply.html"),
+  "utf8",
+);
 
 const templates = {};
 
@@ -740,51 +744,19 @@ registerTemplate("supportAutoReply", ({
   messageHtml,
   supportEmail,
   siteUrl,
-}) => {
-  const theme = supportPriorityTheme(priority);
-  const greeting = firstName ? `Hi ${firstName},` : "Hi,";
-  const rows = [
-    contactFieldRow("Ticket", ticketId, { accent: true }),
-    contactFieldRow("Submitted", submittedAt, { topBorder: true }),
-    contactFieldRow("Dealership", dealership, { topBorder: true }),
-    contactFieldRow("Topic", topic, { topBorder: true }),
-    contactFieldRow("Priority", priority, { topBorder: true }),
-    contactFieldRow("Subject", subject, { topBorder: true }),
-  ].join("");
-
-  const bodyHtml = `
-    <div style="display:inline-block;background:#173021;border:1px solid #2C9257;color:#46D392;font-size:13px;font-weight:700;padding:8px 12px;border-radius:999px;margin-bottom:16px;">Request received</div>
-    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#0F1419;border:1px solid #232A32;border-radius:12px;">
-      ${rows}
-      ${
-        messageHtml
-          ? `<tr>
-        <td style="padding:16px 16px 6px 16px;color:#8B95A1;font-size:12px;text-transform:uppercase;letter-spacing:0.08em;border-top:1px solid #232A32;">Your message</td>
-      </tr>
-      <tr>
-        <td style="padding:0 16px 16px 16px;">
-          <div style="background:#0C1014;border:1px solid #232A32;border-left:3px solid ${theme.color};border-radius:11px;padding:14px 16px;color:#EAECEF;font-size:15px;line-height:1.65;">${messageHtml}</div>
-        </td>
-      </tr>`
-          : ""
-      }
-    </table>
-    <p style="margin:16px 0 0 0;color:#8B95A1;font-size:13px;line-height:1.6;">Our team typically replies within one business day. Need to add anything? Reply to this email or write us at <a href="mailto:${supportEmail}" style="color:#46D392;text-decoration:none;font-weight:600;">${supportEmail}</a>.</p>
-    ${supportCtaButton(siteUrl, "Back to AutoVault")}
-    <p style="margin:18px 0 0 0;color:#5A636D;font-size:12px;line-height:1.6;">— The AutoVault team</p>
-  `;
-
-  return wrapTransactionalEmail({
-    preheader: `Ticket ${ticketId} received — ${subject}`,
-    badge: "Support confirmation",
-    badgeColor: "#46D392",
-    headerTint: "#173021",
-    title: "We got your request",
-    introHtml: `${greeting} ticket <span style="color:#EAECEF;font-weight:700;">${ticketId}</span> is in our queue.`,
-    bodyHtml,
-    footerHtml: "",
-  });
-});
+}) =>
+  supportAutoReplyHtml
+    .replaceAll("{{firstName}}", firstName || "there")
+    .replaceAll("{{ticketId}}", ticketId)
+    .replaceAll("{{submittedAt}}", submittedAt)
+    .replaceAll("{{dealership}}", dealership)
+    .replaceAll("{{topic}}", topic)
+    .replaceAll("{{priority}}", priority)
+    .replaceAll("{{subject}}", subject)
+    .replaceAll("{{messageHtml}}", messageHtml || "")
+    .replaceAll("{{supportEmail}}", supportEmail)
+    .replaceAll("{{siteUrl}}", siteUrl),
+);
 
 export function supportInboundEmail(data) {
   return renderTemplate("supportInbound", data);
