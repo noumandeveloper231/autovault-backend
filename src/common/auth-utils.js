@@ -63,19 +63,20 @@ export function loginPathForPortal(portal) {
   return "/login";
 }
 
-export const PLATFORM_OWNER_ROLES = [
-  "platform_owner",
-  "platform_secondary_owner",
-];
+export const PLATFORM_OWNER_ROLES = ["platform_owner"];
 
 export const MAX_PLATFORM_OWNERS = 3;
 
 export function isPlatformOwnerRole(role) {
-  return role === "platform_owner" || role === "platform_secondary_owner";
+  return role === "platform_owner";
 }
 
-export function isMainPlatformOwnerRole(role) {
-  return role === "platform_owner";
+export function isMainPlatformOwner(userOrClaims) {
+  if (!userOrClaims) return false;
+  if (userOrClaims.role !== "platform_owner") return false;
+  if (userOrClaims.isMainPlatformOwner != null) return !!userOrClaims.isMainPlatformOwner;
+  if (userOrClaims.isMainOwner != null) return !!userOrClaims.isMainOwner;
+  return false;
 }
 
 export function portalForRole(role) {
@@ -99,6 +100,7 @@ export function signAccessToken(user) {
       plan: user.dealership?.plan || null,
       portal,
       mustResetPassword: !!user.mustResetPassword,
+      isMainOwner: isMainPlatformOwner(user),
       type: "access",
     },
     env.JWT_ACCESS_SECRET,

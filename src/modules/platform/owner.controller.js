@@ -76,8 +76,10 @@ export async function listPlatformOwners(req, res) {
   return res.json({
     ...result,
     canAdd:
-      result.canAdd && req.auth.role === "platform_owner" && req.auth.authType !== "api_key",
-    isMainOwner: req.auth.role === "platform_owner",
+      result.canAdd &&
+      !!req.auth.isMainOwner &&
+      req.auth.authType !== "api_key",
+    isMainOwner: !!req.auth.isMainOwner,
   });
 }
 

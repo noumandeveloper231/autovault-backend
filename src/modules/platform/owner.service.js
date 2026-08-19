@@ -14,8 +14,7 @@ import {
 import {
   hashPassword,
   generateTemporaryPassword,
-  isMainPlatformOwnerRole,
-  PLATFORM_OWNER_ROLES,
+  isMainPlatformOwner,
   MAX_PLATFORM_OWNERS,
 } from "../../common/auth-utils.js";
 import { sendEmail } from "../../utils/email.js";
@@ -55,7 +54,7 @@ export async function updateSupportMessage(id, status) {
 }
 
 function serializePlatformOwner(user, currentUserId) {
-  const isMain = user.role === "platform_owner";
+  const isMain = isMainPlatformOwner(user);
   return {
     id: user.id,
     email: user.email,
@@ -71,35 +70,41 @@ function serializePlatformOwner(user, currentUserId) {
   };
 }
 
-function assertMainOwner(actorRole) {
-  if (!isMainPlatformOwnerRole(actorRole)) {
+async function assertMainOwner(actorUserId) {
+  const actor = await prisma.user.findFirst({
+    where: {
+      id: actorUserId,
+      role: "platform_owner",
+      deletedAt: null,
+      isActive: true,
+    },
+  });
+  if (!actor || !actor.isMainPlatformOwner) {
     throw forbidden("Only the main owner can manage Secondary Owners.");
   }
+  return actor;
 }
+
+const platformOwnerWhere = {
+  role: "platform_owner",
+  deletedAt: null,
+};
 
 export async function listPlatformOwners(currentUserId) {
   const rows = await prisma.user.findMany({
-    where: {
-      role: { in: [...PLATFORM_OWNER_ROLES] },
-      deletedAt: null,
-    },
+    where: platformOwnerWhere,
     orderBy: { createdAt: "asc" },
   });
-  rows.sort((a, b) => {
-    if (a.role === "platform_owner" && b.role !== "platform_owner") return -1;
-    if (b.role === "platform_owner" && a.role !== "platform_owner") return 1;
-    return 0;
-  });
+  rows.sort((a, b) => Number(!!b.isMainPlatformOwner) - Number(!!a.isMainPlatformOwner));
   return {
     owners: rows.map((u) => serializePlatformOwner(u, currentUserId)),
     maxOwners: MAX_PLATFORM_OWNERS,
-    canAdd:
-      rows.length < MAX_PLATFORM_OWNERS,
+    canAdd: rows.length < MAX_PLATFORM_OWNERS,
   };
 }
 
 export async function createSecondaryOwner(actor, { fullName, email }) {
-  assertMainOwner(actor.role);
+  await assertMainOwner(actor.userId);
 
   const name = String(fullName || "").trim();
   const loginEmail = String(email || "").toLowerCase().trim();
@@ -107,10 +112,7 @@ export async function createSecondaryOwner(actor, { fullName, email }) {
   if (!loginEmail) throw validationError("Email is required.");
 
   const existingCount = await prisma.user.count({
-    where: {
-      role: { in: [...PLATFORM_OWNER_ROLES] },
-      deletedAt: null,
-    },
+    where: platformOwnerWhere,
   });
   if (existingCount >= MAX_PLATFORM_OWNERS) {
     throw conflict(`This app allows a maximum of ${MAX_PLATFORM_OWNERS} owners.`);
@@ -132,7 +134,8 @@ export async function createSecondaryOwner(actor, { fullName, email }) {
       email: loginEmail,
       fullName: name,
       passwordHash,
-      role: "platform_secondary_owner",
+      role: "platform_owner",
+      isMainPlatformOwner: false,
       isActive: true,
       mustResetPassword: true,
       introCompleted: true,
@@ -171,7 +174,7 @@ export async function createSecondaryOwner(actor, { fullName, email }) {
     entityType: "User",
     entityId: user.id,
     action: "create_secondary_owner",
-    newValues: { email: user.email, role: user.role },
+    newValues: { email: user.email, role: user.role, isMainPlatformOwner: false },
   });
 
   return {
@@ -181,7 +184,7 @@ export async function createSecondaryOwner(actor, { fullName, email }) {
 }
 
 export async function removeSecondaryOwner(actor, targetId) {
-  assertMainOwner(actor.role);
+  await assertMainOwner(actor.userId);
   if (actor.userId === targetId) {
     throw forbidden("You cannot remove your own account.");
   }
@@ -189,12 +192,11 @@ export async function removeSecondaryOwner(actor, targetId) {
   const target = await prisma.user.findFirst({
     where: {
       id: targetId,
-      role: { in: [...PLATFORM_OWNER_ROLES] },
-      deletedAt: null,
+      ...platformOwnerWhere,
     },
   });
   if (!target) throw notFound("Owner not found.");
-  if (target.role === "platform_owner") {
+  if (target.isMainPlatformOwner) {
     throw forbidden("The main owner cannot be removed.");
   }
 

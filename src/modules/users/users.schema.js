@@ -30,7 +30,6 @@ export const listUsersQuerySchema = z.object({
       "cpa",
       "wholesale_dealer",
       "platform_owner",
-      "platform_secondary_owner",
     ])
     .optional(),
   isActive: z

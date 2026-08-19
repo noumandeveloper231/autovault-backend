@@ -12,7 +12,6 @@ datasource db {
 
 enum UserRole {
   platform_owner
-  platform_secondary_owner
   owner
   manager
   sales_rep
@@ -316,6 +315,7 @@ model User {
   dealership   Dealership? @relation(fields: [dealershipId], references: [id])
   lastLoginAt  DateTime?
   mustResetPassword Boolean @default(false)
+  isMainPlatformOwner Boolean @default(false)
    introCompleted   Boolean   @default(false)
    termsAccepted    Boolean   @default(false)
    termsVersion     String?

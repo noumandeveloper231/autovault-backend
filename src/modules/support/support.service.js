@@ -16,7 +16,6 @@ const ROLE_LABELS = {
   cpa: "CPA / Accountant",
   wholesale_dealer: "Wholesale Dealer",
   platform_owner: "Platform Owner",
-  platform_secondary_owner: "Secondary Owner",
   staff: "Staff",
 };
 

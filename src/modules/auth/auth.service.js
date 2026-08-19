@@ -13,7 +13,6 @@ import {
   dashboardPathForPortal,
   loginPathForPortal,
   isPlatformOwnerRole,
-  PLATFORM_OWNER_ROLES,
 } from "../../common/auth-utils.js";
 import {
   AppError,
@@ -45,8 +44,8 @@ export function serializeUser(user, dealership = null) {
     state: dealership?.state ?? null,
     plan: dealership?.plan ?? null,
     mustResetPassword: user.mustResetPassword,
-    isMainOwner: user.role === "platform_owner",
-    canManageOwners: user.role === "platform_owner",
+    isMainOwner: !!(user.role === "platform_owner" && user.isMainPlatformOwner),
+    canManageOwners: !!(user.role === "platform_owner" && user.isMainPlatformOwner),
     introCompleted: !!user.introCompleted,
     termsAccepted: !!user.termsAccepted,
     termsVersion: user.termsVersion || null,
@@ -355,7 +354,7 @@ export async function loginPlatformOwner({ email, password }, ipAddress) {
   const user = await prisma.user.findFirst({
     where: {
       email,
-      role: { in: [...PLATFORM_OWNER_ROLES] },
+      role: "platform_owner",
       deletedAt: null,
       isActive: true,
     },
@@ -382,7 +381,7 @@ export async function mePlatformOwner(userId) {
   const user = await prisma.user.findFirst({
     where: {
       id: userId,
-      role: { in: [...PLATFORM_OWNER_ROLES] },
+      role: "platform_owner",
       deletedAt: null,
       isActive: true,
     },

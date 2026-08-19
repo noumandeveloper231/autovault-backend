@@ -42,7 +42,7 @@ router.use(
 
 // platform_owner may assist without wholesaler plan; dealers must be exact plan
 router.use((req, res, next) => {
-  if (req.auth?.role === "platform_owner" || req.auth?.role === "platform_secondary_owner") return next();
+  if (req.auth?.role === "platform_owner") return next();
   return requireExactPlan("wholesaler")(req, res, next);
 });
 

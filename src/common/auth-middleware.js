@@ -4,7 +4,7 @@ import { env } from "../config/env.js";
 import { prisma } from "../lib/prisma.js";
 import { PLAN_HIERARCHY, planHasFeature } from "../utils/plans.js";
 
-export { isPlatformOwnerRole, PLATFORM_OWNER_ROLES, MAX_PLATFORM_OWNERS } from "./auth-utils.js";
+export { isPlatformOwnerRole, isMainPlatformOwner, PLATFORM_OWNER_ROLES, MAX_PLATFORM_OWNERS } from "./auth-utils.js";
 
 function isPasswordResetAllowedPath(url) {
   const path = String(url || "").split("?")[0];
@@ -33,6 +33,7 @@ export function authenticate(req, _res, next) {
       plan: claims.plan || null,
       portal: claims.portal,
       mustResetPassword: !!claims.mustResetPassword,
+      isMainOwner: !!claims.isMainOwner,
       impersonation: !!claims.impersonation,
       impersonatedBy: claims.impersonatedBy ? String(claims.impersonatedBy) : null,
       impersonationId: claims.impersonationId || null,
@@ -68,9 +69,7 @@ export function authenticateLoad(req, res, next) {
 export function requireRoles(...roles) {
   return (req, _res, next) => {
     if (!req.auth?.role) return next(unauthorized());
-    const allowed = new Set(roles);
-    if (allowed.has("platform_owner")) allowed.add("platform_secondary_owner");
-    if (!allowed.has(req.auth.role)) {
+    if (!roles.includes(req.auth.role)) {
       return next(forbidden("You do not have permission for this action."));
     }
     return next();
@@ -162,6 +161,7 @@ export function ownerOrApiKey(req, _res, next) {
           dealershipId: null,
           authType: "token",
           mustResetPassword: !!claims.mustResetPassword,
+          isMainOwner: !!claims.isMainOwner,
         };
         if (
           req.auth.mustResetPassword &&
@@ -195,7 +195,7 @@ export async function loadUser(req, _res, next) {
   return next();
 }
 
-export const ADMIN_ROLES = ["owner", "manager", "platform_owner", "platform_secondary_owner"];
+export const ADMIN_ROLES = ["owner", "manager", "platform_owner"];
 export const DEALERSHIP_ADMIN_ROLES = ["owner", "manager"];
 export const WRITE_ROLES = ["owner", "manager", "sales_rep", "wholesale_dealer"];
 export const READ_FINANCE_ROLES = [
@@ -203,5 +203,4 @@ export const READ_FINANCE_ROLES = [
   "manager",
   "cpa",
   "platform_owner",
-  "platform_secondary_owner",
 ];
