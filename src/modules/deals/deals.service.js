@@ -13,6 +13,7 @@ import {
   serializeDealJacket,
   generateDealNumber,
 } from "../jackets/jackets.service.js";
+import { nextPlaceholderVin, normalizeVin } from "../../common/vin.js";
 
 function serializeVehicle(v) {
   if (!v) return null;
@@ -481,7 +482,8 @@ export async function importPreviousSold(payload, ctx) {
     throw forbidden("Only managers can import previously sold vehicles.");
   }
 
-  const vin = (payload.vin || "").toUpperCase().trim();
+  let vin = normalizeVin(payload.vin);
+  if (!vin) vin = await nextPlaceholderVin(dealershipId);
   const duplicate = await prisma.vehicle.findFirst({
     where: { dealershipId, vin, deletedAt: null },
   });

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { isAcceptedVin, VIN_FORMAT_MESSAGE } from "../../common/vin.js";
 
 const decimal = z.coerce.number().min(0).optional().nullable();
 const requiredDecimal = z.coerce.number().min(0);
@@ -23,8 +24,16 @@ export const listVehiclesQuerySchema = z.object({
   scope: z.enum(["all", "inventory"]).optional().default("all"),
 });
 
+const vehicleVinSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(17)
+  .transform((v) => v.toUpperCase())
+  .refine((v) => isAcceptedVin(v), { message: VIN_FORMAT_MESSAGE });
+
 export const createVehicleSchema = z.object({
-  vin: z.string().min(5).max(17),
+  vin: vehicleVinSchema,
   stockNumber: z.string().max(50).optional().nullable(),
   make: z.string().min(1).max(80),
   model: z.string().min(1).max(80),

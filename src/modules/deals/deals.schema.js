@@ -1,4 +1,9 @@
 import { z } from "zod";
+import {
+  isAcceptedVin,
+  isPlaceholderVin,
+  VIN_FORMAT_MESSAGE,
+} from "../../common/vin.js";
 
 const customerFields = {
   customerId: z.string().uuid().optional(),
@@ -50,7 +55,14 @@ export const markLossSchema = z.object({
 /** Import a vehicle sold before the dealer joined AutoVault. */
 export const previousSoldSchema = z
   .object({
-    vin: z.string().min(5).max(17),
+    vin: z
+      .string()
+      .trim()
+      .max(17)
+      .optional()
+      .nullable()
+      .transform((v) => (v == null || v === "" ? undefined : v.toUpperCase())),
+    withoutVin: z.boolean().optional(),
     year: z.coerce.number().int().min(1900).max(2100).optional(),
     make: z.string().max(80).optional(),
     model: z.string().max(80).optional(),
@@ -97,6 +109,49 @@ export const previousSoldSchema = z
     commissionRate: z.coerce.number().min(0).optional(),
     commissionType: z.enum(["percentage", "manual", "flat"]).optional(),
     notes: z.string().optional(),
+  })
+  .superRefine((d, ctx) => {
+    const vin = d.vin || "";
+    if (!vin) {
+      if (!d.withoutVin) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "VIN is required, or set withoutVin to assign a stock tag.",
+          path: ["vin"],
+        });
+      }
+    } else if (!isAcceptedVin(vin)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: VIN_FORMAT_MESSAGE,
+        path: ["vin"],
+      });
+    }
+
+    const needsIdentity = !vin || isPlaceholderVin(vin) || d.withoutVin;
+    if (needsIdentity) {
+      if (d.year == null) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Year is required when adding without a VIN.",
+          path: ["year"],
+        });
+      }
+      if (!(d.make || "").trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Make is required when adding without a VIN.",
+          path: ["make"],
+        });
+      }
+      if (!(d.model || "").trim()) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Model is required when adding without a VIN.",
+          path: ["model"],
+        });
+      }
+    }
   })
   .refine((d) => d.saleDate >= d.acquisitionDate, {
     message: "Sale date cannot be before purchase date",
