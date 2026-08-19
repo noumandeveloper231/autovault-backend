@@ -19,6 +19,9 @@ import {
   listDealerships,
   listSupportMessages,
   updateSupportMessage,
+  listPlatformOwners,
+  createSecondaryOwner,
+  removeSecondaryOwner,
 } from "./owner.controller.js";
 
 const authRouter = express.Router();
@@ -81,6 +84,25 @@ router.patch(
   validateParams(uuidParam),
   validateBody(updateSupportMessageSchema),
   asyncHandler(updateSupportMessage),
+);
+
+const createSecondaryOwnerSchema = z.object({
+  fullName: z.string().min(1).max(150),
+  email: z.string().email().transform((v) => v.toLowerCase().trim()),
+});
+
+router.get("/owners", ownerOrApiKey, asyncHandler(listPlatformOwners));
+router.post(
+  "/owners",
+  ownerOrApiKey,
+  validateBody(createSecondaryOwnerSchema),
+  asyncHandler(createSecondaryOwner),
+);
+router.delete(
+  "/owners/:id",
+  ownerOrApiKey,
+  validateParams(uuidParam),
+  asyncHandler(removeSecondaryOwner),
 );
 
 /** v1 mount: /api/v1/platform */

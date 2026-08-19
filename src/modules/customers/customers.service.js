@@ -4,7 +4,7 @@ import { writeAuditLog } from "../../common/audit.js";
 import { pageMeta } from "../../common/validate.js";
 import { serializeDecimals } from "../../common/serialize.js";
 
-const ADMIN_ROLES = new Set(["owner", "manager", "platform_owner"]);
+const ADMIN_ROLES = new Set(["owner", "manager", "platform_owner", "platform_secondary_owner"]);
 
 export function serializeCustomer(customer) {
   if (!customer) return null;

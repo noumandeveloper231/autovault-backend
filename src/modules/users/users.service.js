@@ -138,8 +138,8 @@ async function sendInvitationEmail({
 }
 
 function assertManageableRole(role) {
-  if (role === "platform_owner") {
-    throw forbidden("Cannot assign or invite platform_owner role.");
+  if (role === "platform_owner" || role === "platform_secondary_owner") {
+    throw forbidden("Cannot assign or invite platform owner roles.");
   }
 }
 
@@ -223,8 +223,8 @@ export async function updateUser(
   ipAddress,
 ) {
   const existing = await findTenantUser(userId, dealershipId);
-  if (existing.role === "platform_owner") {
-    throw forbidden("Cannot modify platform_owner accounts.");
+  if (existing.role === "platform_owner" || existing.role === "platform_secondary_owner") {
+    throw forbidden("Cannot modify platform owner accounts.");
   }
   if (data.role) assertManageableRole(data.role);
 
@@ -272,8 +272,8 @@ export async function deactivateUser(
   ipAddress,
 ) {
   const existing = await findTenantUser(userId, dealershipId);
-  if (existing.role === "platform_owner") {
-    throw forbidden("Cannot deactivate platform_owner accounts.");
+  if (existing.role === "platform_owner" || existing.role === "platform_secondary_owner") {
+    throw forbidden("Cannot deactivate platform owner accounts.");
   }
   if (existing.id === changedById) {
     throw forbidden("You cannot deactivate your own account.");

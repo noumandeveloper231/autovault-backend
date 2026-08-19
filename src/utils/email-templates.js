@@ -43,6 +43,7 @@ function wrapBranded({ title, preheader, body, footerNote }) {
 
 const shellHtml = loadEmail("email-shell.html");
 const welcomeHtml = loadEmail("subscription-welcome.html");
+const ownerWelcomeHtml = loadEmail("owner-welcome.html");
 const supportAutoReplyHtml = loadEmail("support-auto-reply.html");
 const supportInboundBody = loadEmail("support-inbound.html");
 const contactInboundHtml = loadEmail("contact-inbound.html");
@@ -81,6 +82,15 @@ registerTemplate("subscriptionWelcome", ({ loginEmail, temporaryPassword }) =>
   fill(welcomeHtml, {
     email: loginEmail,
     tempPassword: temporaryPassword,
+  }),
+);
+
+registerTemplate("ownerWelcome", ({ name, loginEmail, temporaryPassword, loginUrl }) =>
+  fill(ownerWelcomeHtml, {
+    name: name || "there",
+    email: loginEmail,
+    tempPassword: temporaryPassword,
+    loginUrl: loginUrl || "https://www.autovault360.com/owner/login",
   }),
 );
 
@@ -380,6 +390,10 @@ registerTemplate("supportAutoReply", (data = {}) =>
 
 export function subscriptionWelcomeEmail(data) {
   return renderTemplate("subscriptionWelcome", data);
+}
+
+export function ownerWelcomeEmail(data) {
+  return renderTemplate("ownerWelcome", data);
 }
 
 export function salesRepWelcomeEmail(data) {

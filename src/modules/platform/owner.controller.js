@@ -71,4 +71,30 @@ export async function updateSupportMessage(req, res) {
   return res.json({ message });
 }
 
+export async function listPlatformOwners(req, res) {
+  const result = await ownerService.listPlatformOwners(req.auth.userId);
+  return res.json({
+    ...result,
+    canAdd:
+      result.canAdd && req.auth.role === "platform_owner" && req.auth.authType !== "api_key",
+    isMainOwner: req.auth.role === "platform_owner",
+  });
+}
+
+export async function createSecondaryOwner(req, res) {
+  const result = await ownerService.createSecondaryOwner(
+    { userId: req.auth.userId, role: req.auth.role },
+    req.body,
+  );
+  return res.status(201).json(result);
+}
+
+export async function removeSecondaryOwner(req, res) {
+  const result = await ownerService.removeSecondaryOwner(
+    { userId: req.auth.userId, role: req.auth.role },
+    req.params.id,
+  );
+  return res.json(result);
+}
+
 export { ownerLoginSchema };

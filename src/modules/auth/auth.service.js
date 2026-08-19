@@ -12,6 +12,8 @@ import {
   portalForRole,
   dashboardPathForPortal,
   loginPathForPortal,
+  isPlatformOwnerRole,
+  PLATFORM_OWNER_ROLES,
 } from "../../common/auth-utils.js";
 import {
   AppError,
@@ -43,6 +45,8 @@ export function serializeUser(user, dealership = null) {
     state: dealership?.state ?? null,
     plan: dealership?.plan ?? null,
     mustResetPassword: user.mustResetPassword,
+    isMainOwner: user.role === "platform_owner",
+    canManageOwners: user.role === "platform_owner",
     introCompleted: !!user.introCompleted,
     termsAccepted: !!user.termsAccepted,
     termsVersion: user.termsVersion || null,
@@ -118,7 +122,7 @@ export async function login({ email, password }, ipAddress) {
   }
 
   // Platform owners use the separate /owner/login flow.
-  if (user.role === "platform_owner") {
+  if (isPlatformOwnerRole(user.role)) {
     throw new AppError(
       "Platform owners must sign in at the owner login page.",
       403,
@@ -351,7 +355,7 @@ export async function loginPlatformOwner({ email, password }, ipAddress) {
   const user = await prisma.user.findFirst({
     where: {
       email,
-      role: "platform_owner",
+      role: { in: [...PLATFORM_OWNER_ROLES] },
       deletedAt: null,
       isActive: true,
     },
@@ -378,7 +382,7 @@ export async function mePlatformOwner(userId) {
   const user = await prisma.user.findFirst({
     where: {
       id: userId,
-      role: "platform_owner",
+      role: { in: [...PLATFORM_OWNER_ROLES] },
       deletedAt: null,
       isActive: true,
     },

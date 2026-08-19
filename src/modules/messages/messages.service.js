@@ -65,6 +65,7 @@ async function assertNotSystemConversation(conversationId, dealershipId) {
  * to all active sales_rep users. Safe to call frequently (listConversations).
  */
 export async function ensureSalesRepGroupChat(dealershipId) {
+  if (!dealershipId) return null;
   const reps = await prisma.user.findMany({
     where: {
       dealershipId,
@@ -216,6 +217,9 @@ function serializeMessage(msg) {
 }
 
 export async function listConversations(dealershipId, userId, { archived = false } = {}) {
+  if (!dealershipId) {
+    return [];
+  }
   try {
     await ensureSalesRepGroupChat(dealershipId);
   } catch (err) {

@@ -63,8 +63,23 @@ export function loginPathForPortal(portal) {
   return "/login";
 }
 
+export const PLATFORM_OWNER_ROLES = [
+  "platform_owner",
+  "platform_secondary_owner",
+];
+
+export const MAX_PLATFORM_OWNERS = 3;
+
+export function isPlatformOwnerRole(role) {
+  return role === "platform_owner" || role === "platform_secondary_owner";
+}
+
+export function isMainPlatformOwnerRole(role) {
+  return role === "platform_owner";
+}
+
 export function portalForRole(role) {
-  if (role === "platform_owner") return "owner";
+  if (isPlatformOwnerRole(role)) return "owner";
   if (role === "wholesale_dealer") return "wholesale";
   if (role === "sales_rep") return "sales_rep";
   if (role === "cpa") return "cpa";

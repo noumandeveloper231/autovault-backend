@@ -1,8 +1,10 @@
-import { verifyAccessToken } from "./auth-utils.js";
+import { verifyAccessToken, isPlatformOwnerRole } from "./auth-utils.js";
 import { unauthorized, forbidden, AppError } from "./errors.js";
 import { env } from "../config/env.js";
 import { prisma } from "../lib/prisma.js";
 import { PLAN_HIERARCHY, planHasFeature } from "../utils/plans.js";
+
+export { isPlatformOwnerRole, PLATFORM_OWNER_ROLES, MAX_PLATFORM_OWNERS } from "./auth-utils.js";
 
 function isPasswordResetAllowedPath(url) {
   const path = String(url || "").split("?")[0];
@@ -66,7 +68,9 @@ export function authenticateLoad(req, res, next) {
 export function requireRoles(...roles) {
   return (req, _res, next) => {
     if (!req.auth?.role) return next(unauthorized());
-    if (!roles.includes(req.auth.role)) {
+    const allowed = new Set(roles);
+    if (allowed.has("platform_owner")) allowed.add("platform_secondary_owner");
+    if (!allowed.has(req.auth.role)) {
       return next(forbidden("You do not have permission for this action."));
     }
     return next();
@@ -80,7 +84,7 @@ export function requireRoles(...roles) {
  */
 export function requirePlan(minPlan) {
   return (req, _res, next) => {
-    if (req.auth?.role === "platform_owner") return next();
+    if (isPlatformOwnerRole(req.auth?.role)) return next();
     const plan = req.auth?.plan;
     const minLevel = PLAN_HIERARCHY[minPlan] ?? 0;
     const userLevel = PLAN_HIERARCHY[plan] ?? -1;
@@ -94,7 +98,7 @@ export function requirePlan(minPlan) {
 /** Require an exact plan slug (e.g. wholesaler-only features). platform_owner bypasses. */
 export function requireExactPlan(planSlug) {
   return (req, _res, next) => {
-    if (req.auth?.role === "platform_owner") return next();
+    if (isPlatformOwnerRole(req.auth?.role)) return next();
     if (req.auth?.plan !== planSlug) {
       return next(forbidden("This feature is only available on the Wholesalers plan."));
     }
@@ -105,7 +109,7 @@ export function requireExactPlan(planSlug) {
 /** Require PLAN_FEATURES[plan][feature] === true. platform_owner bypasses. */
 export function requireFeature(feature) {
   return (req, _res, next) => {
-    if (req.auth?.role === "platform_owner") return next();
+    if (isPlatformOwnerRole(req.auth?.role)) return next();
     if (!planHasFeature(req.auth?.plan, feature)) {
       return next(forbidden("Your plan does not include this feature."));
     }
@@ -114,16 +118,16 @@ export function requireFeature(feature) {
 }
 
 export function requireTenant(req, _res, next) {
-  if (req.auth?.role === "platform_owner") return next();
+  if (isPlatformOwnerRole(req.auth?.role)) return next();
   if (!req.auth?.dealershipId) {
     return next(forbidden("No dealership context on this account."));
   }
   return next();
 }
 
-/** Resolve dealershipId for queries � never trust client body for tenants. */
+/** Resolve dealershipId for queries — never trust client body for tenants. */
 export function tenantId(req, explicitId) {
-  if (req.auth?.role === "platform_owner" && explicitId) return explicitId;
+  if (isPlatformOwnerRole(req.auth?.role) && explicitId) return explicitId;
   return req.auth?.dealershipId || null;
 }
 
@@ -148,16 +152,30 @@ export function ownerOrApiKey(req, _res, next) {
   if (bearerToken) {
     try {
       const claims = verifyAccessToken(bearerToken);
-      if (claims.role === "platform_owner" || claims.portal === "owner") {
+      if (isPlatformOwnerRole(claims.role) || claims.portal === "owner") {
         req.auth = {
           userId: String(claims.sub),
           email: claims.email,
           name: claims.name,
-          role: "platform_owner",
+          role: claims.role || "platform_owner",
           portal: "owner",
           dealershipId: null,
           authType: "token",
+          mustResetPassword: !!claims.mustResetPassword,
         };
+        if (
+          req.auth.mustResetPassword &&
+          !isPasswordResetAllowedPath(req.originalUrl)
+        ) {
+          return next(
+            new AppError(
+              "You must set a new password before continuing.",
+              403,
+              "PASSWORD_RESET_REQUIRED",
+              { mustResetPassword: true },
+            ),
+          );
+        }
         return next();
       }
     } catch {
@@ -177,7 +195,7 @@ export async function loadUser(req, _res, next) {
   return next();
 }
 
-export const ADMIN_ROLES = ["owner", "manager", "platform_owner"];
+export const ADMIN_ROLES = ["owner", "manager", "platform_owner", "platform_secondary_owner"];
 export const DEALERSHIP_ADMIN_ROLES = ["owner", "manager"];
 export const WRITE_ROLES = ["owner", "manager", "sales_rep", "wholesale_dealer"];
 export const READ_FINANCE_ROLES = [
@@ -185,4 +203,5 @@ export const READ_FINANCE_ROLES = [
   "manager",
   "cpa",
   "platform_owner",
+  "platform_secondary_owner",
 ];

@@ -56,6 +56,11 @@ export const env = {
   JENNA_MODEL_EMBED:
     process.env.JENNA_MODEL_EMBED || "openai/text-embedding-3-small",
   JENNA_DAILY_LIMIT: toNumber(process.env.JENNA_DAILY_LIMIT, 20),
+  SUPER_OWNER_EMAIL: (
+    process.env.SUPER_OWNER_EMAIL || "owner@autovault360.com"
+  )
+    .toLowerCase()
+    .trim(),
 };
 
 export function assertRequiredEnv() {

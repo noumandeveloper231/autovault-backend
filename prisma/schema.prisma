@@ -12,6 +12,7 @@ datasource db {
 
 enum UserRole {
   platform_owner
+  platform_secondary_owner
   owner
   manager
   sales_rep

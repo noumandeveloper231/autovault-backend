@@ -157,7 +157,7 @@ async function getJacketOrThrow(id, dealershipId) {
 }
 
 function assertSalesRepAccess(jacket, ctx, write = false) {
-  if (["owner", "manager", "cpa", "platform_owner"].includes(ctx.role)) {
+  if (["owner", "manager", "cpa", "platform_owner", "platform_secondary_owner"].includes(ctx.role)) {
     return;
   }
   if (ctx.role === "sales_rep") {
@@ -173,7 +173,7 @@ function assertSalesRepAccess(jacket, ctx, write = false) {
 }
 
 function assertManagerAction(ctx) {
-  if (!["owner", "manager", "platform_owner"].includes(ctx.role)) {
+  if (!["owner", "manager", "platform_owner", "platform_secondary_owner"].includes(ctx.role)) {
     throw forbidden("Only managers can perform this action.");
   }
 }
@@ -401,7 +401,7 @@ export async function getJacket(id, dealershipId, ctx) {
 }
 
 export async function createJacket(dealershipId, payload, ctx) {
-  if (!["owner", "manager", "sales_rep", "platform_owner"].includes(ctx.role)) {
+  if (!["owner", "manager", "sales_rep", "platform_owner", "platform_secondary_owner"].includes(ctx.role)) {
     throw forbidden("You cannot create deal jackets.");
   }
 

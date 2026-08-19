@@ -20,6 +20,7 @@ const ROLE_LABELS = {
   owner: "dealership owner",
   manager: "manager",
   platform_owner: "platform owner",
+  platform_secondary_owner: "secondary owner",
 };
 
 function roleLabel(role) {
@@ -877,7 +878,7 @@ export async function updateCommission(id, dealershipId, payload, ctx) {
 }
 
 export async function markCommissionPaid(id, dealershipId, ctx) {
-  if (!["owner", "manager", "platform_owner"].includes(ctx.role)) {
+  if (!["owner", "manager", "platform_owner", "platform_secondary_owner"].includes(ctx.role)) {
     throw forbidden("Only managers can mark commissions as paid.");
   }
 

@@ -158,7 +158,7 @@ async function resolveCustomer(dealershipId, payload, createdById, tx) {
 
 export async function markSold(vehicleId, payload, ctx) {
   const { dealershipId, userId, role } = ctx;
-  if (!["owner", "manager", "platform_owner"].includes(role)) {
+  if (!["owner", "manager", "platform_owner", "platform_secondary_owner"].includes(role)) {
     throw forbidden("Only managers can mark vehicles as sold.");
   }
 
@@ -478,7 +478,7 @@ export async function markSold(vehicleId, payload, ctx) {
  */
 export async function importPreviousSold(payload, ctx) {
   const { dealershipId, userId, role, plan } = ctx;
-  if (!["owner", "manager", "platform_owner"].includes(role)) {
+  if (!["owner", "manager", "platform_owner", "platform_secondary_owner"].includes(role)) {
     throw forbidden("Only managers can import previously sold vehicles.");
   }
 
@@ -808,7 +808,7 @@ export async function importPreviousSold(payload, ctx) {
 
 export async function markLoss(vehicleId, payload, ctx) {
   const { dealershipId, userId, role } = ctx;
-  if (!["owner", "manager", "platform_owner"].includes(role)) {
+  if (!["owner", "manager", "platform_owner", "platform_secondary_owner"].includes(role)) {
     throw forbidden("Only managers can mark vehicles as a loss.");
   }
 
