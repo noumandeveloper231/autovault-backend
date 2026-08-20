@@ -259,6 +259,7 @@ async function captureFlooringUndoFromDb(dealershipId) {
       gracePeriod: toNumber(cfg.gracePeriod),
       payoffDays: toNumber(cfg.payoffDays ?? active?.gracePeriodDays) || 90,
       applied: !!(cfg.applied ?? active?.isActive),
+      configured: !!(cfg.configured ?? cfg.applied ?? active?.isActive),
       scope: cfg.scope || "all",
       planId: active?.id || null,
       tiers: Array.isArray(cfg.tiers)
