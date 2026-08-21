@@ -22,6 +22,7 @@ import {
   createPayrollRunSchema,
   updatePayrollRunSchema,
   listQuerySchema,
+  payrollHistoryQuerySchema,
   idParamSchema,
   checkAvailabilityQuerySchema,
 } from "./payroll.schema.js";
@@ -149,6 +150,12 @@ payrollRunsRouter.get(
   requireRoles(...READ_FINANCE_ROLES),
   validateQuery(listQuerySchema),
   asyncHandler(ctrl.listPayrollRuns),
+);
+payrollRunsRouter.get(
+  "/history",
+  requireRoles(...READ_FINANCE_ROLES),
+  validateQuery(payrollHistoryQuerySchema),
+  asyncHandler(ctrl.getPayrollHistory),
 );
 payrollRunsRouter.post(
   "/",

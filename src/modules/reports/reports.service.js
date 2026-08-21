@@ -1,6 +1,14 @@
 import { prisma } from "../../lib/prisma.js";
 import { toNum, roundMoney } from "../../common/serialize.js";
 import { sumExpensesInRange } from "../expenses/recurring-expenses.js";
+import { periodLaborCost, monthsInRange } from "../payroll/payroll-engine.js";
+
+function isEnginePayrollExpense(e) {
+  const cat = String(e.category || "");
+  const name = String(e.name || "");
+  if (cat === "Payroll" || cat === "Commissions") return true;
+  return /sales\s*team\s*payroll/i.test(name);
+}
 
 function defaultDateRange(from, to) {
   const now = new Date();
@@ -74,15 +82,19 @@ export async function profitLoss(dealershipId, { from, to } = {}) {
       recurringFrequency: true,
       vehicleVin: true,
       notes: true,
+      category: true,
+      name: true,
     },
   });
 
   // Parse optional [recur-end:YYYY-MM] stop marker from notes until a
   // dedicated recurringEndDate column exists.
-  const expensesWithEnd = expenseRows.map((e) => {
-    const m = String(e.notes || "").match(/\[recur-end:(\d{4}-\d{2})(?:-\d{2})?\]/);
-    return m ? { ...e, recurringEndDate: `${m[1]}-28` } : e;
-  });
+  const expensesWithEnd = expenseRows
+    .filter((e) => !isEnginePayrollExpense(e))
+    .map((e) => {
+      const m = String(e.notes || "").match(/\[recur-end:(\d{4}-\d{2})(?:-\d{2})?\]/);
+      return m ? { ...e, recurringEndDate: `${m[1]}-28` } : e;
+    });
 
   const operatingExpenses = sumExpensesInRange(expensesWithEnd, range.from, range.to, {
     excludeVehicleVin: true,
@@ -102,7 +114,72 @@ export async function profitLoss(dealershipId, { from, to } = {}) {
     toNum(commissionsPaid._sum.commissionAmount) ?? 0,
   );
 
-  const net = roundMoney(gross - operatingExpenses - commissionsTotal);
+  const [staffRows, repRows] = await Promise.all([
+    prisma.staffMember.findMany({
+      where: { dealershipId, deletedAt: null, isActive: true },
+    }),
+    prisma.user.findMany({
+      where: {
+        dealershipId,
+        role: "sales_rep",
+        deletedAt: null,
+        isActive: true,
+      },
+      include: { salesRepProfile: true },
+    }),
+  ]);
+
+  const commissionsByRep = {};
+  const paidCommissionRows = await prisma.salesRepCommission.findMany({
+    where: {
+      dealershipId,
+      deletedAt: null,
+      status: "paid",
+      paidAt: { gte: range.from, lte: range.to },
+    },
+    select: {
+      commissionAmount: true,
+      salesRepId: true,
+      salesRep: { select: { id: true, fullName: true } },
+    },
+  });
+  for (const c of paidCommissionRows) {
+    const amt = toNum(c.commissionAmount) || 0;
+    const name = c.salesRep?.fullName;
+    const id = c.salesRepId || c.salesRep?.id;
+    if (name) commissionsByRep[name] = (commissionsByRep[name] || 0) + amt;
+    if (id) commissionsByRep[id] = (commissionsByRep[id] || 0) + amt;
+  }
+
+  const labor = periodLaborCost({
+    staff: staffRows.map((s) => ({
+      id: s.id,
+      name: s.fullName,
+      fullName: s.fullName,
+      role: s.title,
+      title: s.title,
+      payType: s.payType,
+      rate: toNum(s.payRate) || 0,
+      payRate: toNum(s.payRate) || 0,
+      monthly: String(s.payType || "").toLowerCase() === "salary" ? toNum(s.payRate) || 0 : 0,
+      hoursPerDay: s.hoursPerDay != null ? toNum(s.hoursPerDay) : 8,
+      workDays: Array.isArray(s.workDays) ? s.workDays : [1, 2, 3, 4, 5],
+    })),
+    salesReps: repRows.map((u) => ({
+      id: u.id,
+      name: u.fullName,
+      fullName: u.fullName,
+      base: toNum(u.salesRepProfile?.baseSalary) || 0,
+      baseSalary: toNum(u.salesRepProfile?.baseSalary) || 0,
+    })),
+    commissionsByRep,
+    monthCount: monthsInRange(range.from, range.to),
+  });
+
+  const payrollTotal = roundMoney(
+    commissionsTotal + labor.staffWages + labor.repBaseTopUp,
+  );
+  const net = roundMoney(gross - operatingExpenses - payrollTotal);
 
   return {
     period: {
@@ -114,6 +191,9 @@ export async function profitLoss(dealershipId, { from, to } = {}) {
     gross,
     operatingExpenses,
     commissionsPaid: commissionsTotal,
+    staffWages: roundMoney(labor.staffWages),
+    repBaseTopUp: roundMoney(labor.repBaseTopUp),
+    payrollTotal,
     net,
     soldVehicleCount: jackets.length,
   };

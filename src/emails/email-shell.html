@@ -9,6 +9,20 @@
 <title>{{title}}</title>
 <style type="text/css">
   :root { color-scheme: light only; supported-color-schemes: light; }
+  html, body { background-color:#EEF0F5 !important; }
+  @media (prefers-color-scheme: dark) {
+    :root { color-scheme: light only !important; }
+    html, body, .av-bg { background-color:#EEF0F5 !important; }
+    .av-card, .av-box, .av-field { background-color:#FFFFFF !important; }
+    .av-text { color:#0B0B14 !important; }
+    .av-muted { color:#54566B !important; }
+    .av-accent { color:#2743E8 !important; }
+    .av-faint { color:#8A8CA0 !important; }
+    .av-line { border-color:#E7E9F1 !important; }
+    .av-wordmark { color:#2743E8 !important; }
+  }
+  [data-ogsc] .av-bg, [data-ogsc] .av-card, [data-ogsc] .av-box, [data-ogsc] .av-field,
+  [data-ogsb] .av-bg, [data-ogsb] .av-card { background-color:#FFFFFF !important; }
 </style>
 </head>
 <body class="av-bg" style="margin:0;padding:0;background-color:#EEF0F5;">

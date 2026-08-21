@@ -39,6 +39,7 @@ export const createSalesRepSchema = z
     baseSalary: z.coerce.number().min(0).default(0),
     payFrequency: z.enum(["weekly", "biweekly"]).optional(),
     payDay: z.coerce.number().int().min(0).max(6).optional(),
+    payAnchor: z.coerce.date().nullable().optional(),
     paymentMethod: z.enum(["Direct Deposit", "Check", "Cash"]).optional(),
     payDocUrl: z.string().optional(),
     ...commissionFields,
@@ -75,6 +76,7 @@ export const updateSalesRepSchema = z
     baseSalary: z.coerce.number().min(0).optional(),
     payFrequency: z.enum(["weekly", "biweekly"]).nullable().optional(),
     payDay: z.coerce.number().int().min(0).max(6).nullable().optional(),
+    payAnchor: z.coerce.date().nullable().optional(),
     paymentMethod: z.enum(["Direct Deposit", "Check", "Cash"]).nullable().optional(),
     payDocUrl: z.string().nullable().optional(),
     commissionType: z.enum(["percentage", "flat"]).optional(),
@@ -95,6 +97,14 @@ export const updateSalesRepSchema = z
     }
   });
 
+const staffScheduleFields = {
+  payFrequency: z.enum(["weekly", "biweekly"]).nullish(),
+  payDay: z.coerce.number().int().min(0).max(6).nullish(),
+  payAnchor: z.coerce.date().nullable().optional(),
+  workDays: z.array(z.coerce.number().int().min(0).max(6)).max(7).nullish(),
+  hoursPerDay: z.coerce.number().min(0).max(24).nullish(),
+};
+
 export const createStaffSchema = z.object({
   fullName: z.string().min(1, "Full name is required"),
   email: z.string().email("Valid email is required"),
@@ -106,6 +116,7 @@ export const createStaffSchema = z.object({
   payMethod: z.enum(["Direct Deposit", "Check", "Cash"]).nullish(),
   payDocUrl: z.string().nullish(),
   isActive: z.boolean().default(true),
+  ...staffScheduleFields,
 });
 
 export const updateStaffSchema = z
@@ -120,6 +131,11 @@ export const updateStaffSchema = z
     payMethod: z.enum(["Direct Deposit", "Check", "Cash"]).nullable().optional(),
     payDocUrl: z.string().nullable().optional(),
     isActive: z.boolean().optional(),
+    payFrequency: z.enum(["weekly", "biweekly"]).nullable().optional(),
+    payDay: z.coerce.number().int().min(0).max(6).nullable().optional(),
+    payAnchor: z.coerce.date().nullable().optional(),
+    workDays: z.array(z.coerce.number().int().min(0).max(6)).max(7).nullable().optional(),
+    hoursPerDay: z.coerce.number().min(0).max(24).nullable().optional(),
   })
   .refine((d) => Object.keys(d).length > 0, { message: "No fields to update" });
 
@@ -177,6 +193,14 @@ export const listQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   limit: z.coerce.number().int().min(1).max(100).default(25),
   q: z.string().optional(),
+});
+
+export const payrollHistoryQuerySchema = z.object({
+  year: z.coerce.number().int().min(2000).max(2100).optional(),
+  upto: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
 });
 
 export const idParamSchema = z.object({

@@ -4,9 +4,25 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <meta name="x-apple-disable-message-reformatting" />
+<meta name="color-scheme" content="light only" />
+<meta name="supported-color-schemes" content="light" />
 <title>AutoVault Support Confirmation</title>
 <style type="text/css">
-  :root { color-scheme: light; }
+  :root { color-scheme: light only; supported-color-schemes: light; }
+  html, body { background-color:#FFFFFF !important; }
+  @media (prefers-color-scheme: dark) {
+    :root { color-scheme: light only !important; }
+    html, body, .av-bg, .av-card, .av-box, .av-field { background-color:#FFFFFF !important; }
+    .av-text { color:#0B0B14 !important; }
+    .av-muted { color:#54566B !important; }
+    .av-accent { color:#2743E8 !important; }
+    .av-faint { color:#8A8CA0 !important; }
+    .av-line { border-color:#E7E9F1 !important; }
+    .av-wordmark { color:#2743E8 !important; }
+    .av-pill { background-color:#EAF0FF !important; color:#2743E8 !important; }
+  }
+  [data-ogsc] .av-bg, [data-ogsc] .av-card, [data-ogsc] .av-box, [data-ogsc] .av-field,
+  [data-ogsb] .av-bg, [data-ogsb] .av-card { background-color:#FFFFFF !important; }
 </style>
 </head>
 <body class="av-bg" style="margin:0;padding:0;background-color:#FFFFFF;">

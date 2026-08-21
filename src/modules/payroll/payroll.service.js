@@ -13,6 +13,21 @@ import { compressDataUrl } from "../../utils/image-compress.js";
 import { sendEmail } from "../../utils/email.js";
 import { salesRepWelcomeEmail } from "../../utils/email-templates.js";
 import { env } from "../../config/env.js";
+import {
+  buildPayables,
+  reconstructPayrollRunsYtd,
+  formatYmd,
+} from "./payroll-engine.js";
+
+function ymd(value) {
+  if (!value) return null;
+  if (typeof value === "string") return value.slice(0, 10);
+  try {
+    return new Date(value).toISOString().slice(0, 10);
+  } catch {
+    return null;
+  }
+}
 
 const ROLE_LABELS = {
   sales_rep: "sales rep",
@@ -154,6 +169,7 @@ function serializeSalesRep(user, profile) {
           baseSalary: toNum(profile.baseSalary),
           payFrequency: profile.payFrequency,
           payDay: profile.payDay,
+          payAnchor: ymd(profile.payAnchor),
           paymentMethod: profile.paymentMethod,
           payDocUrl: profile.payDocUrl,
           commissionType: profile.commissionType || "percentage",
@@ -176,6 +192,11 @@ function serializeStaff(s) {
     hireDate: s.hireDate,
     payMethod: s.payMethod,
     payDocUrl: s.payDocUrl,
+    payFrequency: s.payFrequency || null,
+    payDay: s.payDay != null ? s.payDay : null,
+    payAnchor: ymd(s.payAnchor),
+    workDays: Array.isArray(s.workDays) ? s.workDays : null,
+    hoursPerDay: s.hoursPerDay != null ? toNum(s.hoursPerDay) : null,
     isActive: s.isActive,
     createdAt: s.createdAt,
     updatedAt: s.updatedAt,
@@ -302,6 +323,7 @@ export async function createSalesRep(dealershipId, payload, ctx) {
         baseSalary: payload.baseSalary ?? 0,
         payFrequency: payload.payFrequency ?? null,
         payDay: payload.payDay ?? null,
+        payAnchor: payload.payAnchor ?? null,
         paymentMethod: payload.paymentMethod ?? null,
         payDocUrl: payload.payDocUrl ?? null,
         commissionType: payload.commissionType ?? "percentage",
@@ -541,6 +563,7 @@ export async function updateSalesRep(id, dealershipId, payload, ctx) {
           ...(payload.baseSalary != null && { baseSalary: payload.baseSalary }),
           ...(payload.payFrequency !== undefined && { payFrequency: payload.payFrequency }),
           ...(payload.payDay !== undefined && { payDay: payload.payDay }),
+          ...(payload.payAnchor !== undefined && { payAnchor: payload.payAnchor }),
           ...(payload.paymentMethod !== undefined && { paymentMethod: payload.paymentMethod }),
           ...(payload.payDocUrl !== undefined && { payDocUrl: payload.payDocUrl }),
           ...(payload.commissionType != null && {
@@ -744,6 +767,11 @@ export async function createStaff(dealershipId, payload, ctx) {
       hireDate: payload.hireDate ?? null,
       payMethod: payload.payMethod ?? null,
       payDocUrl,
+      payFrequency: payload.payFrequency ?? (payload.payType === "hourly" ? "weekly" : null),
+      payDay: payload.payDay ?? (payload.payType === "hourly" ? 5 : null),
+      payAnchor: payload.payAnchor ?? null,
+      workDays: payload.workDays ?? (payload.payType === "hourly" ? [1, 2, 3, 4, 5] : null),
+      hoursPerDay: payload.hoursPerDay ?? (payload.payType === "hourly" ? 8 : null),
       isActive: payload.isActive ?? true,
     },
   });
@@ -792,6 +820,11 @@ export async function updateStaff(id, dealershipId, payload) {
       ...(payload.payMethod !== undefined && { payMethod: payload.payMethod }),
       ...(payDocUrl !== undefined && { payDocUrl }),
       ...(payload.isActive != null && { isActive: payload.isActive }),
+      ...(payload.payFrequency !== undefined && { payFrequency: payload.payFrequency }),
+      ...(payload.payDay !== undefined && { payDay: payload.payDay }),
+      ...(payload.payAnchor !== undefined && { payAnchor: payload.payAnchor }),
+      ...(payload.workDays !== undefined && { workDays: payload.workDays }),
+      ...(payload.hoursPerDay !== undefined && { hoursPerDay: payload.hoursPerDay }),
     },
   });
 
@@ -1048,4 +1081,232 @@ export async function deletePayrollRun(id, dealershipId) {
 
   await prisma.payrollRun.delete({ where: { id } });
   return { message: "Payroll run deleted." };
+}
+
+function staffForEngine(s) {
+  const payType = String(s.payType || "salary");
+  const hourly = payType.toLowerCase() === "hourly";
+  return {
+    id: s.id,
+    name: s.fullName,
+    fullName: s.fullName,
+    role: s.title,
+    title: s.title,
+    payType,
+    rate: toNum(s.payRate) || 0,
+    payRate: toNum(s.payRate) || 0,
+    monthly: payType.toLowerCase() === "salary" ? toNum(s.payRate) || 0 : 0,
+    payFreq: s.payFrequency || (hourly ? "weekly" : "weekly"),
+    payFrequency: s.payFrequency || (hourly ? "weekly" : null),
+    payDay: s.payDay != null ? s.payDay : hourly ? 5 : null,
+    payAnchor: ymd(s.payAnchor),
+    workDays: Array.isArray(s.workDays) ? s.workDays : hourly ? [1, 2, 3, 4, 5] : null,
+    hoursPerDay: s.hoursPerDay != null ? toNum(s.hoursPerDay) : hourly ? 8 : null,
+  };
+}
+
+function repForEngine(user) {
+  const p = user.salesRepProfile || {};
+  return {
+    id: user.id,
+    name: user.fullName,
+    fullName: user.fullName,
+    base: toNum(p.baseSalary) || 0,
+    baseSalary: toNum(p.baseSalary) || 0,
+    payFreq: p.payFrequency || "weekly",
+    payFrequency: p.payFrequency || "weekly",
+    payDay: p.payDay != null ? p.payDay : null,
+    payAnchor: ymd(p.payAnchor),
+  };
+}
+
+/**
+ * Reconstruct year-to-date payroll runs from payday rules, persist past
+ * paydays so the tax record survives staff changes, and merge stored runs
+ * for people who have since left.
+ */
+export async function getPayrollHistory(dealershipId, query = {}, ctx = {}) {
+  const upto = query.upto || formatYmd(new Date());
+  const year = query.year || Number(String(upto).slice(0, 4));
+  const yearStart = new Date(Date.UTC(year, 0, 1));
+  const yearEnd = new Date(Date.UTC(year, 11, 31));
+
+  const [staffRows, repRows, jackets, storedRuns] = await Promise.all([
+    prisma.staffMember.findMany({
+      where: { dealershipId, deletedAt: null, isActive: true },
+    }),
+    prisma.user.findMany({
+      where: {
+        dealershipId,
+        role: "sales_rep",
+        deletedAt: null,
+        isActive: true,
+      },
+      include: { salesRepProfile: true },
+    }),
+    prisma.dealJacket.findMany({
+      where: {
+        dealershipId,
+        deletedAt: null,
+        workflowStatus: "approved",
+        dateSold: { gte: yearStart, lte: yearEnd },
+      },
+      select: {
+        dateSold: true,
+        commissionAmount: true,
+        salesRepId: true,
+        salesRep: { select: { id: true, fullName: true } },
+      },
+    }),
+    prisma.payrollRun.findMany({
+      where: {
+        dealershipId,
+        notes: { startsWith: "auto-payday:" },
+        periodEnd: { gte: yearStart, lte: yearEnd },
+      },
+      include: { items: true },
+    }),
+  ]);
+
+  const jacketsByRep = new Map();
+  for (const j of jackets) {
+    const date = ymd(j.dateSold);
+    const amt = toNum(j.commissionAmount) || 0;
+    const keys = [j.salesRepId, j.salesRep?.id, j.salesRep?.fullName].filter(Boolean);
+    for (const key of keys) {
+      const list = jacketsByRep.get(key) || [];
+      list.push({ date, commission: amt });
+      jacketsByRep.set(key, list);
+    }
+  }
+
+  const staff = staffRows.map(staffForEngine);
+  const salesReps = repRows.map(repForEngine);
+  const payables = buildPayables({ staff, salesReps });
+
+  const amountFor = (e, dateStr) => {
+    if (e.kind !== "rep") return Number(e.amount) || 0;
+    const periodDays = e.payFreq === "biweekly" ? 14 : 7;
+    const [y, m, d] = String(dateStr).split("-").map(Number);
+    const end = new Date(y, m - 1, d);
+    const start = new Date(end);
+    start.setDate(start.getDate() - periodDays);
+    const startStr = formatYmd(start);
+    const list =
+      jacketsByRep.get(e.salesRepId) || jacketsByRep.get(e.name) || [];
+    const commission = list
+      .filter((j) => j.date > startStr && j.date <= dateStr)
+      .reduce((s, j) => s + (Number(j.commission) || 0), 0);
+    const base =
+      (Number(e.baseMonthly) || 0) * (e.payFreq === "biweekly" ? 12 / 26 : 12 / 52);
+    return Math.max(base, commission);
+  };
+
+  const reconstructed = reconstructPayrollRunsYtd({
+    payables,
+    year,
+    uptoStr: upto,
+    amountFor,
+  });
+
+  const seen = new Set(reconstructed.map((r) => `${r.date}|${r.name}`));
+  for (const run of storedRuns) {
+    const date = ymd(run.periodEnd);
+    for (const item of run.items || []) {
+      const name = String(item.description || "").split(" · ")[0] || "Team member";
+      const key = `${date}|${name}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      reconstructed.push({
+        date,
+        name,
+        kind: item.salesRepId ? "rep" : "staff",
+        role: item.salesRepId ? "Sales Rep" : "Staff",
+        amount: toNum(item.amount) || 0,
+        staffMemberId: item.staffMemberId || null,
+        salesRepId: item.salesRepId || null,
+      });
+    }
+  }
+  reconstructed.sort(
+    (a, b) => b.date.localeCompare(a.date) || String(a.name).localeCompare(String(b.name)),
+  );
+
+  // Persist past paydays so the ledger stays after people leave.
+  const existingTags = new Set(
+    storedRuns.map((r) => String(r.notes || "")),
+  );
+  const byDate = {};
+  for (const row of reconstructed) {
+    if (row.date >= upto) continue;
+    (byDate[row.date] = byDate[row.date] || []).push(row);
+  }
+  const missingDates = Object.keys(byDate)
+    .filter((ds) => !existingTags.has(`auto-payday:${ds}`))
+    .sort();
+  for (const ds of missingDates.slice(0, 80)) {
+    const people = byDate[ds].filter((p) => (Number(p.amount) || 0) > 0.005);
+    if (!people.length) continue;
+    const totalAmount = people.reduce((s, p) => s + (Number(p.amount) || 0), 0);
+    const period = new Date(`${ds}T00:00:00.000Z`);
+    try {
+      await prisma.payrollRun.create({
+        data: {
+          dealershipId,
+          periodStart: period,
+          periodEnd: period,
+          status: "paid",
+          processedAt: period,
+          notes: `auto-payday:${ds}`,
+          totalAmount,
+          createdById: ctx.userId || null,
+          items: {
+            create: people.map((p) => ({
+              staffMemberId: p.staffMemberId || null,
+              salesRepId: p.salesRepId || null,
+              description: `${p.name} · ${p.role || (p.kind === "rep" ? "Sales Rep" : "Staff")}`,
+              amount: p.amount,
+            })),
+          },
+        },
+      });
+    } catch (err) {
+      // Duplicate create from a parallel request is harmless.
+    }
+  }
+
+  const ytdTotal = reconstructed.reduce((s, r) => s + (Number(r.amount) || 0), 0);
+  const grouped = {};
+  for (const r of reconstructed) {
+    (grouped[r.date] = grouped[r.date] || []).push({
+      name: r.name,
+      kind: r.kind,
+      role: r.role,
+      amount: Number(r.amount) || 0,
+    });
+  }
+  const runs = Object.keys(grouped)
+    .sort()
+    .reverse()
+    .map((date) => {
+      const people = grouped[date];
+      const total = people.reduce((s, p) => s + p.amount, 0);
+      const status =
+        date < upto ? "paid" : date === upto ? "due_today" : "upcoming";
+      return { date, status, total, people };
+    });
+
+  return {
+    year,
+    upto,
+    ytdTotal: Math.round(ytdTotal * 100) / 100,
+    runs,
+    items: reconstructed.map((r) => ({
+      date: r.date,
+      name: r.name,
+      kind: r.kind,
+      role: r.role,
+      amount: Number(r.amount) || 0,
+    })),
+  };
 }

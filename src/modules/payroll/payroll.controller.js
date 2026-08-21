@@ -160,6 +160,15 @@ export async function listPayrollRuns(req, res) {
   return res.json(result);
 }
 
+export async function getPayrollHistory(req, res) {
+  const result = await payrollService.getPayrollHistory(
+    req.auth.dealershipId,
+    req.query,
+    ctx(req),
+  );
+  return res.json(result);
+}
+
 export async function getPayrollRun(req, res) {
   const payrollRun = await payrollService.getPayrollRun(
     req.params.id,
