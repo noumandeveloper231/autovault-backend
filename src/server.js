@@ -98,7 +98,14 @@ app.use(
   }),
 );
 app.use(express.json({ limit: "5mb" }));
-app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 250 }));
+app.use(
+  rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: env.NODE_ENV === "production" ? 250 : 3000,
+    standardHeaders: true,
+    legacyHeaders: false,
+  }),
+);
 
 app.get("/", (_req, res) => {
   res.json({
