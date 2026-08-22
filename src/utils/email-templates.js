@@ -9,6 +9,15 @@ function loadEmail(name) {
   return readFileSync(join(emailsDir, name), "utf8");
 }
 
+const mobileStyles = loadEmail("email-mobile.css");
+
+function withMobileStyles(html) {
+  if (html.includes("</style>")) {
+    return html.replace("</style>", `${mobileStyles}</style>`);
+  }
+  return html;
+}
+
 function fill(html, vars) {
   let out = html;
   for (const [key, value] of Object.entries(vars)) {
@@ -31,7 +40,7 @@ function dash(value) {
 }
 
 function wrapBranded({ title, preheader, body, footerNote }) {
-  return fill(shellHtml, {
+  return fill(withMobileStyles(shellHtml), {
     title: title || "AutoVault",
     preheader: preheader || "",
     body: body || "",
@@ -42,12 +51,12 @@ function wrapBranded({ title, preheader, body, footerNote }) {
 }
 
 const shellHtml = loadEmail("email-shell.html");
-const welcomeHtml = loadEmail("subscription-welcome.html");
-const ownerWelcomeHtml = loadEmail("owner-welcome.html");
-const supportAutoReplyHtml = loadEmail("support-auto-reply.html");
+const welcomeHtml = withMobileStyles(loadEmail("subscription-welcome.html"));
+const ownerWelcomeHtml = withMobileStyles(loadEmail("owner-welcome.html"));
+const supportAutoReplyHtml = withMobileStyles(loadEmail("support-auto-reply.html"));
 const supportInboundBody = loadEmail("support-inbound.html");
-const contactInboundHtml = loadEmail("contact-inbound.html");
-const contactAutoReplyHtml = loadEmail("contact-auto-reply.html");
+const contactInboundHtml = withMobileStyles(loadEmail("contact-inbound.html"));
+const contactAutoReplyHtml = withMobileStyles(loadEmail("contact-auto-reply.html"));
 const userInvitationBody = loadEmail("user-invitation.html");
 const salesRepWelcomeBody = loadEmail("sales-rep-welcome.html");
 const resetPasswordBody = loadEmail("reset-password.html");
@@ -112,8 +121,8 @@ registerTemplate("userInvitation", ({
     : "";
   const defaultBody = `You have been invited to join AutoVault as <b class="av-text" style="color:#0B0B14;">${label}</b>${dealershipBit}. Accept below to set your password and activate your login.`;
   const dealershipBlock = dealership
-    ? `<tr><td style="padding:16px 18px 6px 18px;color:#8A8CA0;font-family:Arial,Helvetica,sans-serif;font-size:12px;font-weight:bold;letter-spacing:0.06em;text-transform:uppercase;border-top:1px solid #E7E9F1;" class="av-faint av-line">Dealership</td></tr>
-          <tr><td style="padding:0 18px 18px 18px;color:#0B0B14;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:bold;line-height:1.45;" class="av-text">${dealership}</td></tr>`
+    ? `<tr><td style="padding:16px 18px 6px 18px;color:#8A8CA0;font-family:Arial,Helvetica,sans-serif;font-size:12px;font-weight:bold;letter-spacing:0.06em;text-transform:uppercase;border-top:1px solid #E7E9F1;" class="av-faint av-line av-box-cell">Dealership</td></tr>
+          <tr><td style="padding:0 18px 18px 18px;color:#0B0B14;font-family:Arial,Helvetica,sans-serif;font-size:15px;font-weight:bold;line-height:1.45;" class="av-text av-box-cell">${dealership}</td></tr>`
     : "";
 
   return wrapBranded({

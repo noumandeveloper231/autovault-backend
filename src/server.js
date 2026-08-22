@@ -19,7 +19,11 @@ import {
   platformV1Routes,
   ownerLegacyRoutes,
 } from "./modules/platform/owner.routes.js";
-import { usersRouter, invitationsRouter, introRouter } from "./modules/users/users.routes.js";
+import {
+  usersRouter,
+  invitationsRouter,
+  introRouter,
+} from "./modules/users/users.routes.js";
 import {
   vehiclesRouter,
   flooringPlansRouter,
@@ -81,6 +85,20 @@ try {
   // ignored
 }
 
+function isDevLanOrigin(origin) {
+  if (env.NODE_ENV === "production") return false;
+  try {
+    const { hostname } = new URL(origin);
+    if (hostname === "localhost" || hostname === "127.0.0.1") return true;
+    if (/^192\.168\.\d{1,3}\.\d{1,3}$/.test(hostname)) return true;
+    if (/^10\.\d{1,3}\.\d{1,3}\.\d{1,3}$/.test(hostname)) return true;
+    if (/^172\.(1[6-9]|2\d|3[0-1])\.\d{1,3}\.\d{1,3}$/.test(hostname)) return true;
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 app.use(
   "/api/webhooks",
   rateLimit({ windowMs: 60 * 1000, max: 120 }),
@@ -93,6 +111,7 @@ app.use(
     origin: (origin, callback) => {
       if (!origin) return callback(null, true);
       if (allowedOrigins.has(origin)) return callback(null, true);
+      if (isDevLanOrigin(origin)) return callback(null, true);
       return callback(new Error("Not allowed by CORS"));
     },
   }),
