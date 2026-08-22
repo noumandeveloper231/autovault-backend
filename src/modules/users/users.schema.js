@@ -70,6 +70,10 @@ export const acceptInvitationSchema = z.object({
   fullName: z.string().min(1).max(150).optional(),
 });
 
+export const previewInvitationQuerySchema = z.object({
+  token: z.string().min(1),
+});
+
 export const markIntroCompletedSchema = z.object({
   introCompleted: z.boolean(),
 });

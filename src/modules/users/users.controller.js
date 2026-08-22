@@ -64,6 +64,11 @@ export async function acceptInvitation(req, res) {
   return res.status(201).json({ user });
 }
 
+export async function previewInvitation(req, res) {
+  const preview = await usersService.previewInvitation(req.query.token);
+  return res.json({ preview });
+}
+
 export async function listInvitations(req, res) {
   const result = await usersService.listInvitations(
     dealershipId(req),

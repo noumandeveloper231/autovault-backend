@@ -104,6 +104,7 @@ async function sendInvitationEmail({
   fullName,
   dealershipId,
   acceptUrl,
+  expiresAt,
 }) {
   const dealership = await prisma.dealership.findUnique({
     where: { id: dealershipId },
@@ -111,6 +112,7 @@ async function sendInvitationEmail({
   });
   const roleLabel = INVITE_ROLE_LABELS[role] || String(role).replace(/_/g, " ");
   const isCpa = role === "cpa";
+  const expiryNote = formatInviteExpiryNote(expiresAt);
   const { sendEmail } = await import("../../utils/email.js");
   const { userInvitationEmail } = await import("../../utils/email-templates.js");
   await sendEmail({
@@ -124,6 +126,7 @@ async function sendInvitationEmail({
       roleLabel,
       dealership: dealership?.name || null,
       acceptUrl,
+      expiryNote,
       eyebrow: isCpa ? "CPA Portal Invitation" : "Team Invitation",
       accent: isCpa ? "#2DD47F" : "#46D392",
       bodyHtml: isCpa
@@ -135,6 +138,21 @@ async function sendInvitationEmail({
         : undefined,
     }),
   });
+}
+
+function formatInviteExpiryNote(expiresAt) {
+  if (!expiresAt) {
+    return "This link expires soon. If you were not expecting this invite, you can ignore this email.";
+  }
+  const when = new Date(expiresAt).toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZoneName: "short",
+  });
+  return `This link expires on ${when}. If you were not expecting this invite, you can ignore this email.`;
 }
 
 function assertManageableRole(role) {
@@ -396,6 +414,7 @@ export async function inviteUser(
       fullName: invitation.fullName,
       dealershipId,
       acceptUrl,
+      expiresAt: invitation.expiresAt,
     });
   } catch (err) {
     const { logger } = await import("../../common/logger.js");
@@ -447,6 +466,44 @@ export async function inviteUser(
   };
 }
 
+export async function previewInvitation(token) {
+  const raw = String(token || "").trim();
+  if (!raw) {
+    return { valid: false, reason: "missing" };
+  }
+
+  const tokenHash = hashToken(raw);
+  const invitation = await prisma.invitation.findFirst({
+    where: { tokenHash },
+    include: { dealership: { select: { name: true } } },
+  });
+
+  if (!invitation) {
+    return { valid: false, reason: "invalid" };
+  }
+
+  const expired = invitation.expiresAt <= new Date();
+  if (invitation.status !== "pending" || expired) {
+    return {
+      valid: false,
+      reason: expired ? "expired" : invitation.status,
+      expiresAt: invitation.expiresAt,
+      role: invitation.role,
+      roleLabel: INVITE_ROLE_LABELS[invitation.role] || invitation.role,
+    };
+  }
+
+  return {
+    valid: true,
+    expiresAt: invitation.expiresAt,
+    role: invitation.role,
+    roleLabel: INVITE_ROLE_LABELS[invitation.role] || invitation.role,
+    fullName: invitation.fullName,
+    dealershipName: invitation.dealership?.name || null,
+    email: invitation.email,
+  };
+}
+
 export async function acceptInvitation(data, ipAddress) {
   const tokenHash = hashToken(data.token);
   const invitation = await prisma.invitation.findFirst({
@@ -465,22 +522,26 @@ export async function acceptInvitation(data, ipAddress) {
     throw notFound("Invalid or expired invitation.");
   }
 
+  const normalizedEmail = String(invitation.email || "")
+    .trim()
+    .toLowerCase();
+
   const existingUser = await prisma.user.findFirst({
     where: {
       dealershipId: invitation.dealershipId,
-      email: invitation.email,
+      email: { equals: normalizedEmail, mode: "insensitive" },
       deletedAt: null,
     },
   });
   if (existingUser) throw conflict("An account with this email already exists.");
 
   const passwordHash = await hashPassword(data.password);
-  const fullName = data.fullName || invitation.fullName || invitation.email;
+  const fullName = data.fullName || invitation.fullName || normalizedEmail;
 
   const user = await prisma.$transaction(async (tx) => {
     const created = await tx.user.create({
       data: {
-        email: invitation.email,
+        email: normalizedEmail,
         passwordHash,
         fullName,
         role: invitation.role,

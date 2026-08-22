@@ -18,6 +18,7 @@ import {
   updateUserSchema,
   inviteUserSchema,
   acceptInvitationSchema,
+  previewInvitationQuerySchema,
   markIntroCompletedSchema,
   acceptTermsSchema,
   listInvitationsQuerySchema,
@@ -78,6 +79,12 @@ invitationsRouter.post(
   "/accept",
   validateBody(acceptInvitationSchema),
   asyncHandler(ctrl.acceptInvitation),
+);
+
+invitationsRouter.get(
+  "/preview",
+  validateQuery(previewInvitationQuerySchema),
+  asyncHandler(ctrl.previewInvitation),
 );
 
 invitationsRouter.use(authenticate, requireTenant, requireRoles(...ADMIN_ROLES));

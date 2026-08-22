@@ -102,6 +102,7 @@ registerTemplate("userInvitation", ({
   acceptUrl,
   eyebrow,
   bodyHtml,
+  expiryNote,
 }) => {
   const label =
     roleLabel || String(role || "team member").replace(/_/g, " ");
@@ -127,6 +128,9 @@ registerTemplate("userInvitation", ({
       roleLabel: label,
       dealershipBlock,
       acceptUrl,
+      expiryNote:
+        expiryNote ||
+        "This link expires soon. If you were not expecting this invite, you can ignore this email.",
     }),
   });
 });

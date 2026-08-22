@@ -56,26 +56,38 @@ export function serializeUser(user, dealership = null) {
   };
 }
 
-async function loadUserWithDealership(loginId) {
+async function loadUsersWithDealership(loginId) {
   const value = String(loginId || "")
     .trim()
     .toLowerCase();
-  if (!value) return null;
+  if (!value) return [];
   const looksLikeEmail = value.includes("@");
-  return prisma.user.findFirst({
+  return prisma.user.findMany({
     where: {
       deletedAt: null,
       ...(looksLikeEmail
-        ? { email: value }
+        ? { email: { equals: value, mode: "insensitive" } }
         : {
             OR: [
-              { email: value },
+              { email: { equals: value, mode: "insensitive" } },
               { username: { equals: value, mode: "insensitive" } },
             ],
           }),
     },
     include: { dealership: true },
+    orderBy: { createdAt: "desc" },
   });
+}
+
+async function resolveLoginUser(loginId, password) {
+  const candidates = await loadUsersWithDealership(loginId);
+  for (const candidate of candidates) {
+    if (!candidate.isActive) continue;
+    if (await verifyPassword(password, candidate.passwordHash)) {
+      return candidate;
+    }
+  }
+  return null;
 }
 
 async function issueTokenPair(user, ipAddress, opts = {}) {
@@ -110,13 +122,8 @@ async function issueTokenPair(user, ipAddress, opts = {}) {
 }
 
 export async function login({ email, password }, ipAddress) {
-  const user = await loadUserWithDealership(email);
-  if (!user || !user.isActive) {
-    throw unauthorized("Invalid email or password.");
-  }
-
-  const valid = await verifyPassword(password, user.passwordHash);
-  if (!valid) {
+  const user = await resolveLoginUser(email, password);
+  if (!user) {
     throw unauthorized("Invalid email or password.");
   }
 
