@@ -214,12 +214,14 @@ app.use("/api/v1/checkout", checkoutRouter);
 app.use("/api/v1/contact", contactRouter);
 app.use("/api/v1/support", supportRouter);
 app.use("/api/v1/platform", platformV1Routes);
+app.use("/api/v1/owner", ownerLegacyRoutes);
 
 app.use("/api/registrations", registrationRouter);
 app.use("/api/checkout", checkoutRouter);
 app.use("/api/contact", contactRouter);
 app.use("/api/owner", ownerLegacyRoutes);
 app.use("/api/auth", authLegacyRoutes);
+
 
 app.use(errorHandler);
 
