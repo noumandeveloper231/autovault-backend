@@ -117,7 +117,6 @@ export function requireFeature(feature) {
 }
 
 export function requireTenant(req, _res, next) {
-  if (isPlatformOwnerRole(req.auth?.role)) return next();
   if (!req.auth?.dealershipId) {
     return next(forbidden("No dealership context on this account."));
   }
