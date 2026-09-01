@@ -103,7 +103,7 @@ export async function createPost(data) {
     platform_ig: !!data.platformIg,
     platform_lk: !!data.platformLk,
     platform_x: !!data.platformX,
-    status: isPublishNow ? "processing" : "scheduled",
+    status: "scheduled",
   };
 
   const res = await fetch(url, {
@@ -125,19 +125,11 @@ export async function createPost(data) {
     try {
       console.log(`[SocialsService] Instant post requested for X on post ${p.id}...`);
       await postTweetToX({ caption: p.caption, imageUrl: p.image_url });
-      await updatePostStatus(p.id, "sent");
-      p.status = "sent";
     } catch (err) {
       console.error(`[SocialsService] Direct X publish error for post ${p.id}:`, err.message);
-      // Keep record in database marked as scheduled/failed so user can retry
-      await updatePostStatus(p.id, "failed");
-      p.status = "failed";
     }
-  } else if (isPublishNow) {
-    // If published now via Make webhooks for FB/IG/LK, set to scheduled so webhooks pick it up
-    await updatePostStatus(p.id, "scheduled");
-    p.status = "scheduled";
   }
+
 
   return {
     id: p.id,
