@@ -1,5 +1,23 @@
+import { randomUUID } from "crypto";
 import { env } from "../../config/env.js";
-import { validationError } from "../../common/errors.js";
+import { validationError, AppError } from "../../common/errors.js";
+import { postTweetToX } from "./x-integration.service.js";
+import { isR2Configured, createR2UploadUrl } from "../../lib/r2.js";
+
+export async function createSocialUploadUrl(payload) {
+  if (!isR2Configured()) {
+    throw new AppError("R2 storage is not configured", 503, "STORAGE_NOT_CONFIGURED");
+  }
+  const safeName = String(payload.originalName || "media.bin").replace(/[^a-zA-Z0-9._-]/g, "_");
+  const storageKey = `socials/platform/${randomUUID()}-${safeName}`;
+  const result = await createR2UploadUrl(storageKey, payload.mimeType || "image/jpeg");
+  return {
+    uploadUrl: result.uploadUrl,
+    publicUrl: result.publicUrl,
+    storageKey,
+    headers: result.headers,
+  };
+}
 
 function getHeaders() {
   const url = env.SUPABASE_URL;

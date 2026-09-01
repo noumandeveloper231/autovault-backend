@@ -10,6 +10,7 @@ import {
   getXAuthUrl,
   handleXCallback,
   getXStatus,
+  createUploadUrl,
 } from "./socials.controller.js";
 
 const router = express.Router();
@@ -27,5 +28,9 @@ router.delete("/:id", validateParams(uuidParam), asyncHandler(deletePost));
 // X Auth Management
 router.get("/x/auth-url", asyncHandler(getXAuthUrl));
 router.get("/x/status", asyncHandler(getXStatus));
+
+// Media Upload
+router.post("/upload-url", asyncHandler(createUploadUrl));
+
 
 export default router;

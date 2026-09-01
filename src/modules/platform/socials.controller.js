@@ -30,6 +30,12 @@ export async function deletePost(req, res) {
   return res.json({ ok: true });
 }
 
+export async function createUploadUrl(req, res) {
+  const result = await socialsService.createSocialUploadUrl(req.body);
+  return res.status(201).json(result);
+}
+
+
 export async function getXAuthUrl(req, res) {
   const authData = await xService.generateXAuthUrl();
   return res.json(authData);
