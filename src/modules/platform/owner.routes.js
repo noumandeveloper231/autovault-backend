@@ -23,8 +23,10 @@ import {
   createSecondaryOwner,
   removeSecondaryOwner,
 } from "./owner.controller.js";
+import socialsRouter from "./socials.routes.js";
 
 const authRouter = express.Router();
+
 
 authRouter.post(
   "/login",
@@ -36,6 +38,8 @@ authRouter.get("/me", ownerOrApiKey, asyncHandler(ownerMe));
 const router = express.Router();
 
 router.use("/auth", authRouter);
+router.use("/socials", socialsRouter);
+
 
 const registrationsRouter = express.Router();
 registrationsRouter.use(ownerOrApiKey);

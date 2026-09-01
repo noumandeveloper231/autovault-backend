@@ -61,6 +61,14 @@ export const env = {
   )
     .toLowerCase()
     .trim(),
+  SUPABASE_URL: process.env.SUPABASE_URL || "https://krvbvzwgujujyqsapwxr.supabase.co",
+  SUPABASE_KEY: process.env.SUPABASE_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtydmJ2endndWp1anlxc2Fwd3hyIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4NzY3MjYzOSwiZXhwIjoyMTAzMjQ4NjM5fQ.zIxcCD-zYC-hHPUyFDJL2Y3Etrn71k-qOUlrzJa0HLc",
+
+
+  // X (Twitter) API v2 Credentials
+  X_CLIENT_ID: process.env.X_CLIENT_ID || "MmpFMm11Y3NEbXZYcWxkeFVCbkY6MTpjaQ",
+  X_CLIENT_SECRET: process.env.X_CLIENT_SECRET || "_EVmhATaGBc6z9HyZIL6bQmLN23b1DBExqeOa4Ca13gnnW4aUu",
+  X_REDIRECT_URI: process.env.X_REDIRECT_URI || "https://autovault360.com/api/owner/socials/x/callback",
 };
 
 export function assertRequiredEnv() {

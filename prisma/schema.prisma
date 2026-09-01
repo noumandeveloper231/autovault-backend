@@ -1355,3 +1355,5 @@ model SupportMessage {
   @@index([status])
   @@map("support_messages")
 }
+
+
