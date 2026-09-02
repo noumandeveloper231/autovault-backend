@@ -228,6 +228,8 @@ export async function postTweetToX({ caption, imageUrl }) {
   const client = await getValidXClient();
 
   let mediaIds = [];
+  let tweetText = caption;
+
   if (imageUrl) {
     try {
       const mediaId = await uploadMediaFromUrl(client, imageUrl);
@@ -235,13 +237,13 @@ export async function postTweetToX({ caption, imageUrl }) {
         mediaIds.push(mediaId);
       }
     } catch (err) {
-      console.error("[XIntegration] Media upload error:", err.message);
-      throw new Error(`Failed to upload image to X: ${err.message}`);
+      console.warn("[XIntegration] Twitter v1.1 media upload restricted on OAuth 2.0 (403). Falling back to public media URL in tweet text:", err.message);
+      tweetText = `${caption}\n\n${imageUrl}`;
     }
   }
 
   const payload = {
-    text: caption,
+    text: tweetText,
   };
 
   if (mediaIds.length > 0) {
