@@ -2,7 +2,9 @@ import { randomUUID } from "crypto";
 import { env } from "../../config/env.js";
 import { validationError, AppError } from "../../common/errors.js";
 import { postTweetToX } from "./x-integration.service.js";
+import { postToFacebookPage, postToInstagramBusiness } from "./meta-integration.service.js";
 import { isR2Configured, createR2UploadUrl } from "../../lib/r2.js";
+
 
 export async function createSocialUploadUrl(payload) {
   if (!isR2Configured()) {
@@ -120,15 +122,37 @@ export async function createPost(data) {
   const inserted = await res.json();
   const p = inserted[0];
 
-  // If publish_now and platform_x is enabled, dispatch direct X tweet posting
-  if (isPublishNow && p.platform_x) {
-    try {
-      console.log(`[SocialsService] Instant post requested for X on post ${p.id}...`);
-      await postTweetToX({ caption: p.caption, imageUrl: p.image_url });
-    } catch (err) {
-      console.error(`[SocialsService] Direct X publish error for post ${p.id}:`, err.message);
+  // Dispatch direct native posts for X, Facebook, and Instagram when publish_now is requested
+
+  if (isPublishNow) {
+    if (p.platform_x) {
+      try {
+        console.log(`[SocialsService] Instant post requested for X on post ${p.id}...`);
+        await postTweetToX({ caption: p.caption, imageUrl: p.image_url });
+      } catch (err) {
+        console.error(`[SocialsService] Direct X publish error for post ${p.id}:`, err.message);
+      }
+    }
+
+    if (p.platform_fb) {
+      try {
+        console.log(`[SocialsService] Instant post requested for Facebook Page on post ${p.id}...`);
+        await postToFacebookPage({ caption: p.caption, imageUrl: p.image_url });
+      } catch (err) {
+        console.error(`[SocialsService] Direct Facebook publish error for post ${p.id}:`, err.message);
+      }
+    }
+
+    if (p.platform_ig) {
+      try {
+        console.log(`[SocialsService] Instant post requested for Instagram Business on post ${p.id}...`);
+        await postToInstagramBusiness({ caption: p.caption, imageUrl: p.image_url });
+      } catch (err) {
+        console.error(`[SocialsService] Direct Instagram publish error for post ${p.id}:`, err.message);
+      }
     }
   }
+
 
 
   return {
