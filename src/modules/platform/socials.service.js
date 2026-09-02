@@ -124,7 +124,8 @@ export async function createPost(data) {
 
   if (!res.ok) {
     const errorText = await res.text();
-    throw new Error(`Supabase insert failed: ${errorText}`);
+    console.error(`[SocialsService] Supabase insert failed: ${errorText}`);
+    throw new AppError(`Supabase insert failed: ${errorText}`, 400, "SUPABASE_INSERT_ERROR");
   }
 
   const inserted = await res.json();
