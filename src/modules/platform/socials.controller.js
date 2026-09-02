@@ -4,6 +4,7 @@ import * as socialsService from "./socials.service.js";
 const createPostSchema = z.object({
   caption: z.string().min(1, "Caption is required"),
   imageUrl: z.string().optional().nullable(),
+  postType: z.enum(["text", "photo", "video"]).optional(),
   publishType: z.enum(["publish_now", "scheduled"]),
   publishDate: z.string().optional().nullable(),
   publishTime: z.string().optional().nullable(),
@@ -12,6 +13,7 @@ const createPostSchema = z.object({
   platformLk: z.boolean().optional().default(false),
   platformX: z.boolean().optional().default(false),
 });
+
 
 import * as xService from "./x-integration.service.js";
 
