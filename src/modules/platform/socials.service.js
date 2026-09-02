@@ -2,7 +2,9 @@ import { randomUUID } from "crypto";
 import { env } from "../../config/env.js";
 import { validationError, AppError } from "../../common/errors.js";
 import { postTweetToX } from "./x-integration.service.js";
+import { postToFacebookPage, postToInstagramBusiness } from "./meta-integration.service.js";
 import { isR2Configured, createR2UploadUrl } from "../../lib/r2.js";
+
 
 export async function createSocialUploadUrl(payload) {
   if (!isR2Configured()) {
@@ -56,6 +58,7 @@ export async function listPosts() {
     id: p.id,
     caption: p.caption,
     imageUrl: p.image_url,
+    postType: p.post_type || (p.image_url ? (String(p.image_url).toLowerCase().includes(".mp4") || String(p.image_url).toLowerCase().includes("video") ? "video" : "photo") : "text"),
     publishType: p.publish_type,
     publishDate: p.publish_date,
     publishTime: p.publish_time,
@@ -64,18 +67,24 @@ export async function listPosts() {
     platformLk: !!p.platform_lk,
     platformX: !!p.platform_x,
     status: p.status,
+    errorLog: p.error_log || null,
     createdAt: p.created_at,
   }));
 }
 
-export async function updatePostStatus(id, status) {
+export async function updatePostStatus(id, status, errorLog = null) {
   const headers = getHeaders();
   const url = resolveSupabaseUrl(`/social_posts?id=eq.${id}`);
+
+  const body = { status };
+  if (errorLog !== undefined) {
+    body.error_log = errorLog ? (typeof errorLog === "string" ? errorLog : JSON.stringify(errorLog)) : null;
+  }
 
   const res = await fetch(url, {
     method: "PATCH",
     headers,
-    body: JSON.stringify({ status }),
+    body: JSON.stringify(body),
   });
 
   if (!res.ok) {
@@ -92,10 +101,12 @@ export async function createPost(data) {
   const url = resolveSupabaseUrl("/social_posts");
 
   const isPublishNow = data.publishType === "publish_now";
+  const postType = data.postType || (data.imageUrl ? (String(data.imageUrl).toLowerCase().includes(".mp4") || String(data.imageUrl).toLowerCase().includes("video") ? "video" : "photo") : "text");
 
   const body = {
     caption: data.caption,
     image_url: data.imageUrl || null,
+    post_type: postType,
     publish_type: data.publishType || "publish_now",
     publish_date: data.publishDate || null,
     publish_time: data.publishTime || null,
@@ -120,21 +131,64 @@ export async function createPost(data) {
   const inserted = await res.json();
   const p = inserted[0];
 
-  // If publish_now and platform_x is enabled, dispatch direct X tweet posting
-  if (isPublishNow && p.platform_x) {
-    try {
-      console.log(`[SocialsService] Instant post requested for X on post ${p.id}...`);
-      await postTweetToX({ caption: p.caption, imageUrl: p.image_url });
-    } catch (err) {
-      console.error(`[SocialsService] Direct X publish error for post ${p.id}:`, err.message);
+  let finalStatus = "scheduled";
+  const errors = {};
+
+  // Dispatch direct native posts for X, Facebook, and Instagram when publish_now is requested
+  if (isPublishNow) {
+    let hasDirectPlatform = false;
+
+    if (p.platform_x) {
+      hasDirectPlatform = true;
+      try {
+        console.log(`[SocialsService] Instant post requested for X on post ${p.id}...`);
+        await postTweetToX({ caption: p.caption, imageUrl: p.image_url });
+      } catch (err) {
+        console.error(`[SocialsService] Direct X publish error for post ${p.id}:`, err.message);
+        errors.X = err.message;
+      }
+    }
+
+    if (p.platform_fb) {
+      hasDirectPlatform = true;
+      try {
+        console.log(`[SocialsService] Instant post requested for Facebook Page on post ${p.id}...`);
+        await postToFacebookPage({ caption: p.caption, imageUrl: p.image_url });
+      } catch (err) {
+        console.error(`[SocialsService] Direct Facebook publish error for post ${p.id}:`, err.message);
+        errors.Facebook = err.message;
+      }
+    }
+
+    if (p.platform_ig) {
+      hasDirectPlatform = true;
+      try {
+        console.log(`[SocialsService] Instant post requested for Instagram Business on post ${p.id}...`);
+        await postToInstagramBusiness({ caption: p.caption, imageUrl: p.image_url });
+      } catch (err) {
+        console.error(`[SocialsService] Direct Instagram publish error for post ${p.id}:`, err.message);
+        errors.Instagram = err.message;
+      }
+    }
+
+    if (hasDirectPlatform) {
+      const errorKeys = Object.keys(errors);
+      if (errorKeys.length > 0) {
+        finalStatus = "failed";
+        const formattedLog = errorKeys.map(k => `[${k}] ${errors[k]}`).join("\n");
+        await updatePostStatus(p.id, "failed", formattedLog);
+      } else {
+        finalStatus = "sent";
+        await updatePostStatus(p.id, "sent", null);
+      }
     }
   }
-
 
   return {
     id: p.id,
     caption: p.caption,
     imageUrl: p.image_url,
+    postType,
     publishType: p.publish_type,
     publishDate: p.publish_date,
     publishTime: p.publish_time,
@@ -142,10 +196,12 @@ export async function createPost(data) {
     platformIg: !!p.platform_ig,
     platformLk: !!p.platform_lk,
     platformX: !!p.platform_x,
-    status: p.status,
+    status: finalStatus,
+    errorLog: Object.keys(errors).length ? errors : null,
     createdAt: p.created_at,
   };
 }
+
 
 export async function deletePost(id) {
   const headers = getHeaders();
