@@ -1,6 +1,18 @@
+import fs from "fs";
+import path from "path";
 import { TwitterApi } from "twitter-api-v2";
 import { env } from "../../config/env.js";
 import { validationError } from "../../common/errors.js";
+
+// Local token persistence file path
+const TOKEN_FILE_PATH = path.resolve(process.cwd(), ".tokens", "x_tokens.json");
+
+function ensureTokenDir() {
+  const dir = path.dirname(TOKEN_FILE_PATH);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+}
 
 // In-memory cache for PKCE auth sessions (codeVerifier + state mapping)
 const pkceStore = new Map();
@@ -23,60 +35,91 @@ function getSupabaseHeaders() {
 }
 
 /**
- * Load stored X tokens from Supabase (or memory fallback)
+ * Load stored X tokens from disk or Supabase
  */
 async function loadStoredTokens() {
-  const headers = getSupabaseHeaders();
-  if (!headers) return storedTokens;
+  if (storedTokens && storedTokens.refreshToken) {
+    return storedTokens;
+  }
 
+  // 1. Try loading from local disk file
   try {
-    const url = `${env.SUPABASE_URL.replace(/\/+$/, "")}/rest/v1/x_tokens?select=*&limit=1`;
-    const res = await fetch(url, { headers });
-    if (res.ok) {
-      const rows = await res.json();
-      if (rows && rows.length > 0) {
-        storedTokens = {
-          accessToken: rows[0].access_token,
-          refreshToken: rows[0].refresh_token,
-          expiresAt: rows[0].expires_at,
-          xUserId: rows[0].x_user_id,
-        };
+    if (fs.existsSync(TOKEN_FILE_PATH)) {
+      const fileData = fs.readFileSync(TOKEN_FILE_PATH, "utf-8");
+      const parsed = JSON.parse(fileData);
+      if (parsed && parsed.refreshToken) {
+        storedTokens = parsed;
         return storedTokens;
       }
     }
   } catch (err) {
-    console.error("[XIntegration] Error loading tokens from Supabase:", err.message);
+    console.warn("[XIntegration] Could not read disk token file:", err.message);
   }
+
+  // 2. Try loading from Supabase
+  const headers = getSupabaseHeaders();
+  if (headers) {
+    try {
+      const url = `${env.SUPABASE_URL.replace(/\/+$/, "")}/rest/v1/x_tokens?select=*&limit=1`;
+      const res = await fetch(url, { headers });
+      if (res.ok) {
+        const rows = await res.json();
+        if (rows && rows.length > 0) {
+          storedTokens = {
+            accessToken: rows[0].access_token,
+            refreshToken: rows[0].refresh_token,
+            expiresAt: rows[0].expires_at,
+            xUserId: rows[0].x_user_id,
+          };
+          return storedTokens;
+        }
+      }
+    } catch (err) {
+      console.error("[XIntegration] Error loading tokens from Supabase:", err.message);
+    }
+  }
+
   return storedTokens;
 }
 
 /**
- * Save X tokens to Supabase (or memory fallback)
+ * Save X tokens to disk and Supabase
  */
 async function saveTokens(tokens) {
   storedTokens = tokens;
-  const headers = getSupabaseHeaders();
-  if (!headers) return;
 
+  // 1. Save to local disk file
   try {
-    const baseUrl = env.SUPABASE_URL.replace(/\/+$/, "");
-    const upsertUrl = `${baseUrl}/rest/v1/x_tokens`;
-    const body = {
-      id: "owner_x_token",
-      access_token: tokens.accessToken,
-      refresh_token: tokens.refreshToken,
-      expires_at: tokens.expiresAt || null,
-      x_user_id: tokens.xUserId || null,
-      updated_at: new Date().toISOString(),
-    };
-
-    await fetch(upsertUrl, {
-      method: "POST",
-      headers: { ...headers, "Prefer": "resolution=merge-duplicates" },
-      body: JSON.stringify(body),
-    });
+    ensureTokenDir();
+    fs.writeFileSync(TOKEN_FILE_PATH, JSON.stringify(tokens, null, 2), "utf-8");
+    console.log("[XIntegration] Saved X tokens to local disk file successfully.");
   } catch (err) {
-    console.error("[XIntegration] Error saving tokens to Supabase:", err.message);
+    console.error("[XIntegration] Error writing disk token file:", err.message);
+  }
+
+  // 2. Save to Supabase
+  const headers = getSupabaseHeaders();
+  if (headers) {
+    try {
+      const baseUrl = env.SUPABASE_URL.replace(/\/+$/, "");
+      const upsertUrl = `${baseUrl}/rest/v1/x_tokens`;
+      const body = {
+        id: "owner_x_token",
+        access_token: tokens.accessToken,
+        refresh_token: tokens.refreshToken,
+        expires_at: tokens.expiresAt || null,
+        x_user_id: tokens.xUserId || null,
+        updated_at: new Date().toISOString(),
+      };
+
+      await fetch(upsertUrl, {
+        method: "POST",
+        headers: { ...headers, "Prefer": "resolution=merge-duplicates" },
+        body: JSON.stringify(body),
+      });
+    } catch (err) {
+      console.error("[XIntegration] Error saving tokens to Supabase:", err.message);
+    }
   }
 }
 
