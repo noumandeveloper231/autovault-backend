@@ -43,7 +43,13 @@ export async function getXAuthUrl(req, res) {
   return res.json(authData);
 }
 
+export async function getXStatus(req, res) {
+  const status = await xService.getXConnectionStatus();
+  return res.json(status);
+}
+
 export async function handleXCallback(req, res) {
+
   const { code, state } = req.query;
   if (!code || !state) {
     return res.status(400).send("Missing OAuth code or state parameter.");
