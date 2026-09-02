@@ -106,7 +106,6 @@ export async function createPost(data) {
   const body = {
     caption: data.caption,
     image_url: data.imageUrl || null,
-    post_type: postType,
     publish_type: data.publishType || "publish_now",
     publish_date: data.publishDate || null,
     publish_time: data.publishTime || null,
