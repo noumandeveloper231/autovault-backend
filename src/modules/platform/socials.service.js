@@ -3,6 +3,7 @@ import { env } from "../../config/env.js";
 import { validationError, AppError } from "../../common/errors.js";
 import { postTweetToX } from "./x-integration.service.js";
 import { postToFacebookPage, postToInstagramBusiness } from "./meta-integration.service.js";
+import { postToLinkedIn } from "./linkedin-integration.service.js";
 import { isR2Configured, createR2UploadUrl } from "../../lib/r2.js";
 
 
@@ -176,6 +177,17 @@ export async function createPost(data) {
       } catch (err) {
         console.error(`[SocialsService] Direct Instagram publish error for post ${p.id}:`, err.message);
         errors.Instagram = err.message;
+      }
+    }
+
+    if (p.platform_lk) {
+      hasDirectPlatform = true;
+      try {
+        console.log(`[SocialsService] Instant post requested for LinkedIn on post ${p.id}...`);
+        await postToLinkedIn({ caption: p.caption, imageUrl: p.image_url });
+      } catch (err) {
+        console.error(`[SocialsService] Direct LinkedIn publish error for post ${p.id}:`, err.message);
+        errors.LinkedIn = err.message;
       }
     }
 
