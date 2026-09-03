@@ -73,7 +73,12 @@ export const env = {
   // X (Twitter) API v2 Credentials
   X_CLIENT_ID: process.env.X_CLIENT_ID || "MmpFMm11Y3NEbXZYcWxkeFVCbkY6MTpjaQ",
   X_CLIENT_SECRET: process.env.X_CLIENT_SECRET || "_EVmhATaGBc6z9HyZIL6bQmLN23b1DBExqeOa4Ca13gnnW4aUu",
-  X_REDIRECT_URI: process.env.X_REDIRECT_URI || "https://autovault360.com/api/owner/socials/x/callback",
+  X_REDIRECT_URI: process.env.X_REDIRECT_URI || "https://api.autovault360.com/api/owner/socials/x/callback",
+
+  // LinkedIn API Credentials
+  LINKEDIN_CLIENT_ID: process.env.LINKEDIN_CLIENT_ID || "",
+  LINKEDIN_CLIENT_SECRET: process.env.LINKEDIN_CLIENT_SECRET || "",
+  LINKEDIN_REDIRECT_URI: process.env.LINKEDIN_REDIRECT_URI || "https://api.autovault360.com/api/owner/socials/linkedin/callback",
 };
 
 export function assertRequiredEnv() {
