@@ -10,6 +10,8 @@ import {
   getXAuthUrl,
   handleXCallback,
   getXStatus,
+  listXLogs,
+  retryXLog,
   createUploadUrl,
   getMetaAuthUrl,
   handleMetaCallback,
@@ -29,9 +31,11 @@ router.get("/", asyncHandler(listPosts));
 router.post("/", validateBody(createPostSchema), asyncHandler(createPost));
 router.delete("/:id", validateParams(uuidParam), asyncHandler(deletePost));
 
-// X Auth Management
+// X Auth & Log Management
 router.get("/x/auth-url", asyncHandler(getXAuthUrl));
 router.get("/x/status", asyncHandler(getXStatus));
+router.get("/x/logs", asyncHandler(listXLogs));
+router.post("/x/logs/:id/retry", asyncHandler(retryXLog));
 
 // Meta Auth Management
 router.get("/meta/auth-url", asyncHandler(getMetaAuthUrl));

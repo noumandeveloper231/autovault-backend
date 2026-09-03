@@ -48,6 +48,16 @@ export async function getXStatus(req, res) {
   return res.json(status);
 }
 
+export async function listXLogs(req, res) {
+  const logs = await xService.listXPostLogs();
+  return res.json({ logs });
+}
+
+export async function retryXLog(req, res) {
+  const result = await xService.retryXPost(req.params.id);
+  return res.json({ success: true, result });
+}
+
 export async function handleXCallback(req, res) {
 
   const { code, state } = req.query;
