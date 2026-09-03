@@ -243,11 +243,17 @@ export async function handleLinkedInCallback(code, state) {
 export async function getLinkedInConnectionStatus() {
   const tokens = await loadStoredTokens();
   const isConnected = !!(tokens && tokens.accessToken && (tokens.expiresAt ? Date.now() < tokens.expiresAt : true));
+  const daysRemaining = (tokens && tokens.expiresAt)
+    ? Math.max(0, Math.ceil((tokens.expiresAt - Date.now()) / (1000 * 60 * 60 * 24)))
+    : (isConnected ? 60 : 0);
+
   return {
     connected: isConnected,
     authorUrn: tokens?.authorUrn || null,
     name: tokens?.name || null,
     email: tokens?.email || null,
+    expiresAt: tokens?.expiresAt || null,
+    daysRemaining,
   };
 }
 
@@ -359,18 +365,76 @@ async function downloadMediaBuffer(mediaUrl) {
 }
 
 /**
+ * Resolves currently active LinkedIn API versions dynamically, newest first.
+ */
+function getActiveLinkedInApiVersions() {
+  if (process.env.LINKEDIN_API_VERSION) {
+    return [process.env.LINKEDIN_API_VERSION];
+  }
+  const now = new Date();
+  const versions = [];
+
+  // Generate monthly versions for the past 14 months (e.g. 202609, 202608, ..., 202507)
+  for (let i = 0; i <= 14; i++) {
+    const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
+    const yyyymm = `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+    if (!versions.includes(yyyymm)) {
+      versions.push(yyyymm);
+    }
+  }
+  return versions;
+}
+
+/**
+ * Execute LinkedIn REST API call with automatic version auto-fallback
+ */
+async function fetchLinkedInRest(url, { method = "POST", token, body = null, headers = {} }) {
+  const versions = getActiveLinkedInApiVersions();
+  let lastRes = null;
+
+  for (const version of versions) {
+    const requestHeaders = {
+      "Authorization": `Bearer ${token}`,
+      "LinkedIn-Version": version,
+      "X-Restli-Protocol-Version": "2.0.0",
+      "Content-Type": "application/json",
+      ...headers,
+    };
+
+    const res = await fetch(url, {
+      method,
+      headers: requestHeaders,
+      body,
+    });
+
+    if (res.ok) {
+      return res;
+    }
+
+    const errText = await res.clone().text();
+    lastRes = res;
+
+    // If version is inactive or nonexistent (HTTP 426 or NONEXISTENT_VERSION), try next version
+    if (res.status === 426 || errText.includes("NONEXISTENT_VERSION") || errText.includes("is not active")) {
+      console.warn(`[LinkedInIntegration] Version ${version} rejected by LinkedIn: ${errText.trim()}. Trying next supported version...`);
+      continue;
+    }
+
+    // Other API error, stop trying versions and return response
+    return res;
+  }
+
+  return lastRes;
+}
+
+/**
  * Upload Image to LinkedIn via /rest/images?action=initializeUpload
  */
 async function uploadLinkedInImage(token, authorUrn, buffer, mimeType) {
   console.log(`[LinkedInIntegration] Initializing image upload for owner ${authorUrn}...`);
-  const initRes = await fetch("https://api.linkedin.com/rest/images?action=initializeUpload", {
+  const initRes = await fetchLinkedInRest("https://api.linkedin.com/rest/images?action=initializeUpload", {
     method: "POST",
-    headers: {
-      "Authorization": `Bearer ${token}`,
-      "LinkedIn-Version": "202405",
-      "X-Restli-Protocol-Version": "2.0.0",
-      "Content-Type": "application/json",
-    },
+    token,
     body: JSON.stringify({
       initializeUploadRequest: {
         owner: authorUrn,
@@ -414,14 +478,9 @@ async function uploadLinkedInImage(token, authorUrn, buffer, mimeType) {
  */
 async function uploadLinkedInVideo(token, authorUrn, buffer, mimeType) {
   console.log(`[LinkedInIntegration] Initializing video upload (${buffer.length} bytes)...`);
-  const initRes = await fetch("https://api.linkedin.com/rest/videos?action=initializeUpload", {
+  const initRes = await fetchLinkedInRest("https://api.linkedin.com/rest/videos?action=initializeUpload", {
     method: "POST",
-    headers: {
-      "Authorization": `Bearer ${token}`,
-      "LinkedIn-Version": "202405",
-      "X-Restli-Protocol-Version": "2.0.0",
-      "Content-Type": "application/json",
-    },
+    token,
     body: JSON.stringify({
       initializeUploadRequest: {
         owner: authorUrn,
@@ -472,14 +531,9 @@ async function uploadLinkedInVideo(token, authorUrn, buffer, mimeType) {
 
   // Finalize video upload
   console.log(`[LinkedInIntegration] Finalizing video upload for ${videoUrn}...`);
-  const finalizeRes = await fetch("https://api.linkedin.com/rest/videos?action=finalizeUpload", {
+  const finalizeRes = await fetchLinkedInRest("https://api.linkedin.com/rest/videos?action=finalizeUpload", {
     method: "POST",
-    headers: {
-      "Authorization": `Bearer ${token}`,
-      "LinkedIn-Version": "202405",
-      "X-Restli-Protocol-Version": "2.0.0",
-      "Content-Type": "application/json",
-    },
+    token,
     body: JSON.stringify({
       finalizeUploadRequest: {
         video: videoUrn,
@@ -518,16 +572,17 @@ export async function executeLinkedInPostPipeline({ caption, imageUrl, logId }) 
   try {
     const tokens = await loadStoredTokens();
     if (!tokens || !tokens.accessToken) {
-      throw validationError("LinkedIn account is not connected. Please click 'Connect LinkedIn' in the Auto Socials settings.");
+      throw new Error("LinkedIn account is not connected. Please connect your LinkedIn account in Auto Socials settings.");
     }
 
     const authorUrn = tokens.authorUrn;
     if (!authorUrn) {
-      throw validationError("LinkedIn author URN is missing. Please disconnect and reconnect your LinkedIn account.");
+      throw new Error("LinkedIn Author URN is missing. Please reconnect your LinkedIn account.");
     }
 
     let mediaUrn = null;
 
+    // If media attached, download from R2 and upload to LinkedIn
     if (imageUrl) {
       // Step 1: Download from Cloudflare R2
       console.log(`[LinkedInIntegration] [1/3] Downloading media from R2: ${imageUrl}`);
@@ -587,14 +642,9 @@ export async function executeLinkedInPostPipeline({ caption, imageUrl, logId }) 
       };
     }
 
-    const postRes = await fetch("https://api.linkedin.com/rest/posts", {
+    const postRes = await fetchLinkedInRest("https://api.linkedin.com/rest/posts", {
       method: "POST",
-      headers: {
-        "Authorization": `Bearer ${tokens.accessToken}`,
-        "LinkedIn-Version": "202405",
-        "X-Restli-Protocol-Version": "2.0.0",
-        "Content-Type": "application/json",
-      },
+      token: tokens.accessToken,
       body: JSON.stringify(postPayload),
     });
 

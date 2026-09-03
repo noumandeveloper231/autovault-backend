@@ -77,28 +77,15 @@ export async function updatePostStatus(id, status, errorLog = null) {
   const headers = getHeaders();
   const url = resolveSupabaseUrl(`/social_posts?id=eq.${id}`);
 
-  const body = { status };
-  if (errorLog !== undefined && errorLog !== null) {
-    body.error_log = typeof errorLog === "string" ? errorLog : JSON.stringify(errorLog);
-  }
-
   const res = await fetch(url, {
     method: "PATCH",
     headers,
-    body: JSON.stringify(body),
+    body: JSON.stringify({ status }),
   });
 
   if (!res.ok) {
     const errorText = await res.text();
     console.error(`[SocialsService] Failed to update status for post ${id}:`, errorText);
-    // If Supabase rejected error_log column, fallback to updating status only
-    if (body.error_log) {
-      await fetch(url, {
-        method: "PATCH",
-        headers,
-        body: JSON.stringify({ status }),
-      });
-    }
   }
 }
 
