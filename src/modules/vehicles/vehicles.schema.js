@@ -83,11 +83,21 @@ const addOnItemSchema = z.object({
   cost: z.coerce.number().min(0).default(0),
 });
 
+const moneyAmount = z.preprocess((v) => {
+  if (v == null || v === "") return null;
+  if (typeof v === "string") {
+    const t = v.replace(/,/g, "").trim();
+    return t === "" ? null : t;
+  }
+  return v;
+}, z.coerce.number().min(0).max(99999999.99).nullable());
+
 const feesSchema = z.object({
-  addOnItems: z.array(addOnItemSchema).default([]),
-  netCheck: z.coerce.number().min(0).max(99999999.99).optional().nullable(),
+  addOnItems: z.array(addOnItemSchema).optional(),
+  netCheck: moneyAmount.optional(),
   netCheckReason: z.string().max(200).optional().nullable(),
   netCheckNotes: z.string().max(2000).optional().nullable(),
+  statusInfo: z.record(z.string(), z.any()).optional(),
 }).catchall(z.any());
 
 export const updateVehicleSchema = createVehicleSchema

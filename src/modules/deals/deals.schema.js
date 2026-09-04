@@ -38,7 +38,11 @@ export const markSoldSchema = z
     additionalExpenses: z.coerce.number().min(0).default(0),
     fees: z.any().default({}),
     /** Finance-company remittance (optional). Prefer fees.netCheck when both sent. */
-    netCheck: z.coerce.number().min(0).optional().nullable(),
+    netCheck: z.preprocess((v) => {
+      if (v == null || v === "") return undefined;
+      if (typeof v === "string") return v.replace(/,/g, "").trim();
+      return v;
+    }, z.coerce.number().min(0).max(99999999.99).optional().nullable()),
     titleReceived: z.boolean().optional(),
     titlePresent: z.boolean().optional(),
   })

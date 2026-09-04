@@ -10,6 +10,7 @@ import {
 import { compressDataUrl } from "../../utils/image-compress.js";
 import { env } from "../../config/env.js";
 import { deleteR2Object, isR2Configured } from "../../lib/r2.js";
+import { mergeJsonFees } from "../../common/fees.js";
 
 const FINAL_STATUSES = ["approved", "rejected"];
 
@@ -571,7 +572,7 @@ export async function updateJacket(id, dealershipId, payload, ctx) {
     _resolvedCommission: resolved,
     fees:
       payload.fees != null
-        ? payload.fees
+        ? mergeJsonFees(jacket.fees, payload.fees)
         : jacket.fees && typeof jacket.fees === "object"
           ? jacket.fees
           : {},
@@ -604,7 +605,9 @@ export async function updateJacket(id, dealershipId, payload, ctx) {
     ...(payload.gapAmount != null && {
       gapAmount: roundMoney(payload.gapAmount),
     }),
-    ...(payload.fees != null && { fees: payload.fees }),
+    ...(payload.fees != null && {
+      fees: mergeJsonFees(jacket.fees, payload.fees),
+    }),
     ...(payload.lender !== undefined && { lender: payload.lender }),
     ...(payload.rosNumber !== undefined && { rosNumber: payload.rosNumber }),
     ...(payload.notes !== undefined && { notes: payload.notes }),

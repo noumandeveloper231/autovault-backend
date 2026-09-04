@@ -10,6 +10,7 @@ import {
   allVehiclesWhere,
   currentInventoryWhere,
 } from "./vehicle-status.js";
+import { mergeJsonFees } from "../../common/fees.js";
 
 function toDecimal(value) {
   if (value == null) return 0;
@@ -469,6 +470,9 @@ export async function updateVehicle(
   if (normalizedVin) updateData.vin = normalizedVin;
   delete updateData.status;
   for (const key of DEAL_SYNC_KEYS) delete updateData[key];
+  if (updateData.fees !== undefined) {
+    updateData.fees = mergeJsonFees(existing.fees, updateData.fees);
+  }
 
   await prisma.vehicle.update({
     where: { id: vehicleId },
