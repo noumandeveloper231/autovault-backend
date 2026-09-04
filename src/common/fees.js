@@ -13,6 +13,9 @@ export function mergeJsonFees(existing, incoming) {
   const prev = jsonFees(existing);
   const next = jsonFees(incoming);
   const merged = { ...prev, ...next };
+  if (Object.prototype.hasOwnProperty.call(next, "netCheck") && next.netCheck == null) {
+    delete merged.netCheck;
+  }
   if (
     next.statusInfo &&
     typeof next.statusInfo === "object" &&
