@@ -521,7 +521,13 @@ export async function updateJacket(id, dealershipId, payload, ctx) {
   assertSalesRepAccess(jacket, ctx, true);
 
   var onlyFees = payload.fees != null || payload.additionalExpenses != null;
-  var otherFields = Object.keys(payload).filter(function(k) { return k !== 'fees' && k !== 'additionalExpenses'; });
+  var otherFields = Object.keys(payload).filter(function (k) {
+    return (
+      k !== "fees" &&
+      k !== "additionalExpenses" &&
+      payload[k] !== undefined
+    );
+  });
   if (FINAL_STATUSES.includes(jacket.workflowStatus) && otherFields.length > 0) {
     throw conflict(`Deal jacket is already ${jacket.workflowStatus}.`);
   }

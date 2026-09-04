@@ -24,8 +24,32 @@ export const createJacketSchema = z.object({
   commissionType: z.enum(["percentage", "manual", "flat"]).optional(),
 });
 
-export const updateJacketSchema = createJacketSchema
-  .partial()
+/** No `.default()` keys — Zod would otherwise inject dealType / zeros on PATCH and
+ *  block fee-only updates (Net Check) on already-approved jackets. */
+export const updateJacketSchema = z
+  .object({
+    vehicleId: z.string().uuid().optional(),
+    customerId: z.string().uuid().optional(),
+    salesRepId: z.string().uuid().nullable().optional(),
+    soldPrice: z.coerce.number().positive().optional(),
+    totalTax: z.coerce.number().min(0).optional(),
+    totalSalePrice: z.coerce.number().min(0).optional(),
+    downPayment: z.coerce.number().min(0).optional(),
+    amountFinanced: z.coerce.number().min(0).optional(),
+    additionalExpenses: z.coerce.number().min(0).optional(),
+    tradeInAllowance: z.coerce.number().min(0).optional(),
+    warrantyAmount: z.coerce.number().min(0).optional(),
+    gapAmount: z.coerce.number().min(0).optional(),
+    fees: z.any().optional(),
+    lender: z.string().optional().nullable(),
+    rosNumber: z.string().optional().nullable(),
+    notes: z.string().optional().nullable(),
+    dealType: z.enum(["Retail", "Wholesale", "Fleet"]).optional(),
+    dateSold: z.coerce.date().optional(),
+    commissionRate: z.coerce.number().min(0).optional(),
+    commissionAmount: z.coerce.number().min(0).optional(),
+    commissionType: z.enum(["percentage", "manual", "flat"]).optional(),
+  })
   .refine((d) => Object.keys(d).length > 0, { message: "No fields to update" });
 
 export const jacketListQuerySchema = z.object({
