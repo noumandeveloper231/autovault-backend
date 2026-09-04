@@ -85,7 +85,7 @@ const addOnItemSchema = z.object({
 
 const feesSchema = z.object({
   addOnItems: z.array(addOnItemSchema).default([]),
-  netCheck: z.coerce.number().min(0).optional().nullable(),
+  netCheck: z.coerce.number().min(0).max(99999999.99).optional().nullable(),
   netCheckReason: z.string().max(200).optional().nullable(),
   netCheckNotes: z.string().max(2000).optional().nullable(),
 }).catchall(z.any());
