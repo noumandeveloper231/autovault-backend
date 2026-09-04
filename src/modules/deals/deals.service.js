@@ -14,6 +14,7 @@ import {
   generateDealNumber,
 } from "../jackets/jackets.service.js";
 import { nextPlaceholderVin, normalizeVin } from "../../common/vin.js";
+import { mergeJsonFees } from "../../common/fees.js";
 
 function serializeVehicle(v) {
   if (!v) return null;
@@ -191,8 +192,10 @@ export async function markSold(vehicleId, payload, ctx) {
 
   const salesTax = roundMoney(payload.salesTaxAmount ?? 0);
   const licenseFees = roundMoney(payload.licenseFees ?? 0);
-  const feesObj =
-    payload.fees && typeof payload.fees === "object" ? payload.fees : {};
+  const feesObj = mergeJsonFees(
+    vehicle.fees,
+    payload.fees && typeof payload.fees === "object" ? payload.fees : {},
+  );
   const addOnItems = Array.isArray(feesObj.addOnItems) ? feesObj.addOnItems : [];
   const addOnCostFromItems = roundMoney(
     addOnItems.reduce((s, a) => s + (Number(a.cost) || 0), 0),
@@ -348,7 +351,9 @@ export async function markSold(vehicleId, payload, ctx) {
       dateSold: saleDate,
       rosNumber: payload.rosNumber ?? null,
       notes: payload.notes ?? null,
-      fees: payload.fees ?? {},
+      fees: hasNetCheck
+        ? { ...feesObj, netCheck: roundMoney(Number(netCheckRaw)) }
+        : feesObj,
       createdById: userId,
       reviewedById: userId,
       reviewedAt: new Date(),
